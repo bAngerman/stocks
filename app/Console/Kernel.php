@@ -29,6 +29,18 @@ class Kernel extends ConsoleKernel
     }
 
     /**
+     * Define the application's command short schedule.
+     *
+     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
+     * @return void
+     */
+    protected function shortSchedule(\Spatie\ShortSchedule\ShortSchedule $shortSchedule)
+    {
+        $schedule->command('stocks:scrapeWSBPages')->everyFiveMinutes();
+        $schedule->command('stocks:scrapeWSBThread')->everySeconds(5);
+    }
+
+    /**
      * Register the commands for the application.
      *
      * @return void

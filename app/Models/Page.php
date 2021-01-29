@@ -7,7 +7,7 @@ use App\Models\BaseModel;
 use Carbon\Carbon;
 
 use App\Models\Comment;
-use DB;
+use Log;
 
 use voku\helper\HtmlDomParser;
 
@@ -43,15 +43,34 @@ class Page extends BaseModel
         $comment = new Comment;
 
         // Get all pages that havent been run in the past hr.
-        $pages = Page::where(
-            'last_run', '<', Carbon::now()->subHours(1)
-        )->limit(10)->get();
+        $pages = Page::where([
+            [ 'last_run', '<', Carbon::now()->subHours(1) ],
+            [ 'running', false ]
+        ])->limit(10)->get();
 
         if ( ! $pages->isEmpty() ) {
-            foreach ( $pages as $page ) {
-                $comment->doCommentScrape( $page->id );
-                sleep(1);
+
+            Page::whereIn( 'id', $pages->pluck('id') )->update(
+                [ 'running' => true ]
+            );
+            
+            try {
+                foreach ( $pages as $page ) {
+                    $comment->doCommentScrape( $page->id );
+                    sleep(1);
+                }
+            } catch( Exception $e ) {
+                Log::err("There was an error with page batch, marking as not running", $e);
             }
+
+            // Always mark as not running
+            $this->markAsNotRunning($pages);
         }
+    }
+
+    public function markAsNotRunning($pages) {
+        Page::whereIn( 'id', $pages->pluck('id') )->update(
+            [ 'running' => false ]
+        );
     }
 }
