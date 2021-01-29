@@ -38,9 +38,11 @@ class Comment extends BaseModel
         try {
             $thread = HtmlDomParser::file_get_html( $page->slug );
             Log::info(sprintf("Got thread: %s", $page->slug));
-        }catch(Exception $e) {
+        } catch(Exception $e) {
             Log::err(sprintf("Failed thread: %s", $page->slug));
         }
+
+        $comments = [];
 
         foreach( $thread->find('.thing.comment > .entry > form') as $comment ) {
 
@@ -55,7 +57,7 @@ class Comment extends BaseModel
             
             $tickers = $ticker->extractTickers($comment_text);
 
-            $row = Comment::firstOrCreate([
+            $comments[] = Comment::firstOrCreate([
                 'thing_id' => $thing_id,
             ],[
                 'content' => $comment_text,
@@ -64,8 +66,13 @@ class Comment extends BaseModel
             ]);
         }
 
-        // Update the page last run so we do not run it again soon.
-        $page->last_run = Carbon::now();
+        if ( count($comments) === 0 ) {
+            $page->last_run = Carbon::tomorrow();
+        } else {
+            // Update the page last run so we do not run it again soon.
+            $page->last_run = Carbon::now();
+        }
+
         $page->save();
 
         return;
