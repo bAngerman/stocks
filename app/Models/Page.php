@@ -32,6 +32,7 @@ class Page extends BaseModel
                     'slug' => $href,
                 ],[
                     'last_run' => Carbon::createFromTimestamp(0)->toDateString(),
+                    'running'  => false,
                 ]);
             }
         }
