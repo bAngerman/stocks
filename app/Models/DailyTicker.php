@@ -49,4 +49,13 @@ class DailyTicker extends BaseModel
         
         return $d_tickers;
     }
+
+    public function getTickersForWeek() {
+        $today = Carbon::today();
+        $week_ago = $today->subDays(7);
+
+        $w_tickers = DailyTicker::whereBetween('day', [$week_ago, $today])->get();
+
+        return $w_tickers;
+    }
 }

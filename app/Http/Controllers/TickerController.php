@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Models\Ticker;
+use App\Models\DailyTicker;
 
 class TickerController extends Controller
 {
@@ -16,7 +17,7 @@ class TickerController extends Controller
         $payload = [
             'status' => 200,
             'data' => [
-                'tickers' => (new Ticker)->getWeekTickers(),
+                'tickers' => (new DailyTicker)->getTickersForWeek(),
             ],
         ];
 

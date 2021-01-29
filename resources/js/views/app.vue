@@ -14,7 +14,7 @@ export default {
   computed: {},
   data() {
     return {
-      message:'Hello Worlds',
+      message:'Hello World',
       tickers: null
     }
   },

@@ -102,7 +102,7 @@ class Ticker extends BaseModel
         }
     }
     
-    public function getTickerTotals() {
+    public function getAllTickers() {
         $tickers = Ticker::all();
 
         return $tickers;

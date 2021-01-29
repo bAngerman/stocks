@@ -55,18 +55,15 @@ class Page extends BaseModel
                 [ 'running' => true ]
             );
             
-            try {
-                foreach ( $pages as $page ) {
-                    $comment->doCommentScrape( $page->id );
-                    sleep(1);
-                }
-            } catch( Exception $e ) {
-                Log::err("There was an error with page batch, marking as not running", $e);
+            foreach ( $pages as $page ) {
+                $comment->doCommentScrape( $page->id );
+                sleep(1);
             }
 
             // Always mark as not running
             $this->markAsNotRunning($pages);
         }
+
     }
 
     public function markAsNotRunning($pages) {
