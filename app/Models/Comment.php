@@ -50,7 +50,7 @@ class Comment extends BaseModel
             $comment_text = $comment->findOne('.md')->text();
 
             // Comment already exists, skip.
-            if ( Comment::where('thing_id', $thing_id)->first() ) {
+            if ( Comment::where(['thing_id' => $thing_id])->first() ) {
                 echo sprintf("Skipped comment %s\n", $thing_id);
                 continue;
             }
