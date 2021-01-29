@@ -42,7 +42,7 @@ class Comment extends BaseModel
             Log::err(sprintf("Failed thread: %s", $page->slug));
         }
 
-        $comments = [];
+        $newComments = [];
 
         foreach( $thread->find('.thing.comment > .entry > form') as $comment ) {
 
@@ -57,16 +57,24 @@ class Comment extends BaseModel
             
             $tickers = $ticker->extractTickers($comment_text);
 
-            $comments[] = Comment::firstOrCreate([
-                'thing_id' => $thing_id,
-            ],[
-                'content' => $comment_text,
-                'page_id' => $page_id,
-                'tickers' => implode( ',', array_keys($tickers) )
-            ]);
+            $comment = Comment::where([
+                ['thing_id' => $thing_id]
+            ])->first();
+
+            if ( $comment === null ) {
+                $comment = new Comment([
+                    'thing_id' => $thing_id,
+                    'content'  => $comment_text,
+                    'page_id'  => $page_id,
+                    'tickers'  => implode( ',', array_keys($tickers) )
+                ]);
+                $comment->save();
+
+                $newComments[] = $comment;
+            }
         }
 
-        if ( count($comments) === 0 ) {
+        if ( count($newComments) === 0 ) {
             $page->last_run = Carbon::tomorrow();
         } else {
             // Update the page last run so we do not run it again soon.
