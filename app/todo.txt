@@ -1,0 +1,13 @@
+# TODO LIST
+
+CHECK - Compare Tickers to csv instead of regex
+CHECK - strip whitespace and tabs from tickers
+
+
+- FRONTEND
+- Daily change %s.
+-- stocks.bdangerman.com/
+-- stocks.bdangerman.com/{y}/{m}/{d}
+
+Servpass.
+-- dIrkg041ie123ie
