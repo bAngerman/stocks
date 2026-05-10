@@ -8,10 +8,16 @@ use App\Models\Persona;
 use App\Models\PriceSnapshot;
 use App\Services\MarketDataService;
 use App\Trading\MarketQuote;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 
 beforeEach(function () {
+    Carbon::setTestNow('2026-05-12 14:00:00'); // Monday 10am ET (UTC-4 → 14:00 UTC)
     Bus::fake()->except([EvaluatePersonaJob::class]);
+});
+
+afterEach(function () {
+    Carbon::setTestNow();
 });
 
 it('dispatches ExecuteTradeJob directly for a high-confidence signal', function () {
@@ -35,8 +41,7 @@ it('dispatches ExecuteTradeJob directly for a high-confidence signal', function 
 
     EvaluatePersonaJob::dispatchSync($persona);
 
-    Bus::assertDispatched(ExecuteTradeJob::class, fn ($job) =>
-        $job->signal->ticker === 'AAPL' &&
+    Bus::assertDispatched(ExecuteTradeJob::class, fn ($job) => $job->signal->ticker === 'AAPL' &&
         $job->signal->action === TradeAction::Buy
     );
     Bus::assertNotDispatched(AIEvaluationJob::class);
@@ -95,4 +100,43 @@ it('reuses an existing PriceSnapshot within the polling window', function () {
     $this->app->instance(MarketDataService::class, $mockService);
 
     EvaluatePersonaJob::dispatchSync($persona);
+});
+
+it('skips evaluation before market open', function () {
+    Carbon::setTestNow('2026-05-12 13:00:00'); // 9:00am ET — before 9:30am open
+
+    $persona = Persona::factory()->withTickers(['AAPL'])->create();
+    $mockService = Mockery::mock(MarketDataService::class);
+    $mockService->shouldNotReceive('getQuote');
+    $this->app->instance(MarketDataService::class, $mockService);
+
+    EvaluatePersonaJob::dispatchSync($persona);
+
+    Bus::assertNothingDispatched();
+});
+
+it('skips evaluation after market close', function () {
+    Carbon::setTestNow('2026-05-12 20:30:00'); // 4:30pm ET — after 4:00pm close
+
+    $persona = Persona::factory()->withTickers(['AAPL'])->create();
+    $mockService = Mockery::mock(MarketDataService::class);
+    $mockService->shouldNotReceive('getQuote');
+    $this->app->instance(MarketDataService::class, $mockService);
+
+    EvaluatePersonaJob::dispatchSync($persona);
+
+    Bus::assertNothingDispatched();
+});
+
+it('skips evaluation on weekends', function () {
+    Carbon::setTestNow('2026-05-10 14:00:00'); // Sunday 10am ET
+
+    $persona = Persona::factory()->withTickers(['AAPL'])->create();
+    $mockService = Mockery::mock(MarketDataService::class);
+    $mockService->shouldNotReceive('getQuote');
+    $this->app->instance(MarketDataService::class, $mockService);
+
+    EvaluatePersonaJob::dispatchSync($persona);
+
+    Bus::assertNothingDispatched();
 });

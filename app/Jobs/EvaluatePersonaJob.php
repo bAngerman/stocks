@@ -20,6 +20,10 @@ class EvaluatePersonaJob implements ShouldQueue
 
     public function handle(MarketDataService $marketDataService): void
     {
+        if (! $this->isDuringMarketHours()) {
+            return;
+        }
+
         $tickers = $this->persona->strategy_parameters['tickers'] ?? [];
 
         if (empty($tickers)) {
@@ -46,11 +50,34 @@ class EvaluatePersonaJob implements ShouldQueue
 
         $snapshot = $snapshots->firstWhere('ticker', $signal->ticker);
 
+        if (! $snapshot) {
+            Log::warning('EvaluatePersonaJob: signal ticker not in snapshots', [
+                'persona_id' => $this->persona->id,
+                'ticker' => $signal->ticker,
+            ]);
+
+            return;
+        }
+
         if ($signal->shouldConsultAI) {
             AIEvaluationJob::dispatch($this->persona, $signal, $snapshot);
         } else {
             ExecuteTradeJob::dispatch($this->persona, $signal, (float) $snapshot->price);
         }
+    }
+
+    private function isDuringMarketHours(): bool
+    {
+        $now = now()->setTimezone('America/New_York');
+
+        if ($now->isWeekend()) {
+            return false;
+        }
+
+        $minutesFromMidnight = $now->hour * 60 + $now->minute;
+
+        // 570 = 9:30am, 960 = 4:00pm
+        return $minutesFromMidnight >= 570 && $minutesFromMidnight < 960;
     }
 
     private function getOrFetchSnapshots(array $tickers, MarketDataService $marketDataService): Collection

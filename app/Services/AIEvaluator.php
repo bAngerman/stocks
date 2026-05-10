@@ -23,11 +23,13 @@ class AIEvaluator
             'x-api-key' => config('services.anthropic.key'),
             'anthropic-version' => config('services.anthropic.version'),
             'content-type' => 'application/json',
-        ])->post('https://api.anthropic.com/v1/messages', [
+        ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
             'model' => config('services.anthropic.model'),
             'max_tokens' => 256,
             'messages' => [['role' => 'user', 'content' => $prompt]],
         ]);
+
+        $response->throw();
 
         $text = $response->json('content.0.text', '');
         $parsed = json_decode($text, true);
