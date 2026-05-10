@@ -1,3 +1,46 @@
+=== project rules ===
+
+# Autotrader — Project Context
+
+## Purpose
+
+This is a paper trading bot built for learning purposes. It runs multiple strategy *personas*, each with its own portfolio, trading logic, and configuration. On a recurring intraday schedule, personas evaluate market prices and execute paper trades stored in the local database. No real money, no external brokerage — all positions are mocked locally.
+
+## Architecture Pattern
+
+The system uses a **queue-based per-persona pipeline**. Laravel Scheduler dispatches one `EvaluatePersonaJob` per active persona on a fixed interval. Jobs are independent — a slow AI call for one persona does not block others.
+
+Decision flow: `EvaluatePersonaJob` → strategy evaluates → `TradeSignal` → (conditionally) `AIEvaluationJob` → `ExecuteTradeJob`
+
+Full architecture spec: `docs/superpowers/specs/2026-05-10-autotrader-design.md`
+
+## Domain Model Glossary
+
+- **Persona** — a trading profile with a cash balance, strategy type, and JSON parameters (including ticker watchlist). Strategy types are PHP enum cases; personas are DB rows.
+- **Position** — an open or closed holding (ticker + shares + average cost) belonging to a persona.
+- **Trade** — an immutable record of a buy or sell execution. Includes algo rationale and optional AI rationale.
+- **PriceSnapshot** — a cached price fetch for a ticker within a polling window. Shared across personas watching the same ticker.
+- **DiscordReport** — a log of weekly summary messages posted to Discord.
+- **TradeSignal** — a readonly DTO produced by a strategy class. Contains action, shares, confidence, rationale, and a `shouldConsultAI` flag.
+- **StrategyInterface** — all strategy classes implement `evaluate(Persona, Collection $snapshots): ?TradeSignal`.
+- **AIEvaluator** — service that wraps the Claude API. Called only when a signal's `shouldConsultAI` is true.
+
+## Key Conventions
+
+- Strategy *types* are PHP classes (implementing `StrategyInterface`); strategy *instances* are Persona DB rows referencing a `StrategyType` enum case.
+- `ExecuteTradeJob` must never retry automatically — duplicate execution would double a trade.
+- `PriceSnapshot` deduplication: always check for a snapshot within the current polling window before calling Yahoo Finance.
+- Market hours guard lives in `EvaluatePersonaJob` — no evaluation outside NYSE hours (9:30am–4:00pm ET, Mon–Fri).
+- Asset scope: **stocks and ETFs only** — no options, no crypto.
+
+## Integrations
+
+- **Market data**: `scheb/yahoo-finance-api` — wrapped in `MarketDataService`. Never call the library directly from jobs or strategies.
+- **AI evaluation**: Claude API via Anthropic PHP SDK — wrapped in `AIEvaluator`. Key in `ANTHROPIC_API_KEY`.
+- **Discord**: Incoming webhook only (no bot/OAuth). URL in `DISCORD_WEBHOOK_URL` / `services.discord.webhook_url`. Weekly post every Friday at 12:00pm `America/Edmonton`.
+
+=== end project rules ===
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
