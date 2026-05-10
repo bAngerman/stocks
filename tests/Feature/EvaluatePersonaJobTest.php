@@ -12,7 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 
 beforeEach(function () {
-    Carbon::setTestNow('2026-05-12 14:00:00'); // Monday 10am ET (UTC-4 → 14:00 UTC)
+    Carbon::setTestNow('2026-05-12 14:00:00'); // Tuesday 10am ET (UTC-4 → 14:00 UTC)
     Bus::fake()->except([EvaluatePersonaJob::class]);
 });
 
