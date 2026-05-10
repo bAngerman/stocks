@@ -11,7 +11,8 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.7",
-        "laravel/tinker": "^3.0"
+        "laravel/tinker": "^3.0",
+        "scheb/yahoo-finance-api": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
