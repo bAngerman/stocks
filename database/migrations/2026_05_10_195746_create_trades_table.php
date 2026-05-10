@@ -23,6 +23,8 @@ return new class extends Migration
             $table->text('ai_rationale')->nullable();
             $table->timestamp('executed_at');
             $table->timestamps();
+
+            $table->index(['persona_id', 'executed_at']);
         });
     }
 

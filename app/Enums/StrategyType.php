@@ -2,8 +2,6 @@
 
 namespace App\Enums;
 
-use App\Trading\Strategies\MeanReversionStrategy;
-use App\Trading\Strategies\MomentumStrategy;
 use App\Trading\StrategyInterface;
 
 enum StrategyType: string
@@ -14,8 +12,8 @@ enum StrategyType: string
     public function strategyClass(): string
     {
         return match ($this) {
-            self::Momentum => MomentumStrategy::class,
-            self::MeanReversion => MeanReversionStrategy::class,
+            self::Momentum => 'App\Trading\Strategies\MomentumStrategy',
+            self::MeanReversion => 'App\Trading\Strategies\MeanReversionStrategy',
         };
     }
 
