@@ -14,17 +14,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ApiClient::class, fn () => ApiClientFactory::createApiClient());
 
-        $this->app->singleton(MarketDataService::class, function () {
-            return new MarketDataService(app(ApiClient::class));
-        });
+        $this->app->singleton(MarketDataService::class, fn ($app) => new MarketDataService($app->make(ApiClient::class)));
 
-        $this->app->singleton(DiscordService::class, function () {
-            return new DiscordService(
-                token: config('services.discord.token'),
-                channelId: config('services.discord.channel_id'),
-            );
-        });
+        // DiscordService constructor: __construct(string $token, string $channelId)
+        $this->app->singleton(DiscordService::class, fn ($app) => new DiscordService(
+            token: $app['config']['services.discord.token'],
+            channelId: $app['config']['services.discord.channel_id'],
+        ));
     }
-
-    public function boot(): void {}
 }
