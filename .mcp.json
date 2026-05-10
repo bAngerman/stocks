@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "wsl.exe",
+            "args": [
+                "/home/brendan/.config/herd-lite/bin/php",
+                "/mnt/c/Users/Brendan/laravel/autotrader/artisan",
+                "boost:mcp"
+            ]
+        }
+    }
+}
