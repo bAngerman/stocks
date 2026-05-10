@@ -13,7 +13,7 @@ A Laravel-based paper trading bot for learning purposes. The system runs multipl
 - Intraday polling on a fixed interval (e.g. every 15 minutes during market hours)
 - Market data via `scheb/yahoo-finance-api` (unofficial Yahoo Finance PHP client)
 - AI layer via Claude API (Anthropic SDK)
-- Discord integration via webhook (one-way, weekly)
+- Discord integration via bot token and REST API (one-way posting, weekly)
 
 ---
 
@@ -169,7 +169,7 @@ Before calling Yahoo Finance, the job checks for a `PriceSnapshot` with `fetched
 1. Queries `Trade` records from the past 7 days
 2. Queries current `Position` records with unrealised P&L (using latest `PriceSnapshot`)
 3. Builds a per-persona summary (trades made, realised gains/losses, unrealised positions)
-4. Posts to the Discord webhook URL configured in `services.discord.webhook_url`
+4. Posts to the configured Discord channel via `DiscordService`
 5. Logs a `DiscordReport` record
 
 ---
@@ -181,7 +181,7 @@ Before calling Yahoo Finance, the job checks for a `PriceSnapshot` with `fetched
 | Yahoo Finance timeout / bad response | Job logs warning, persona skips this cycle. No retry (data will be fresh next cycle). |
 | Claude API failure in `AIEvaluationJob` | Retries up to 3 times with exponential backoff. If all retries fail, signal is discarded and failure is logged. |
 | `ExecuteTradeJob` failure | Does **not** retry automatically (would duplicate trades). Logs error and fires a `TradeExecutionFailed` event for future alerting. |
-| Discord webhook failure in `PostWeeklyReportJob` | Retries up to 3 times. `DiscordReport` record is only written on success. |
+| Discord API failure in `PostWeeklyReportJob` | Retries up to 3 times. `DiscordReport` record is only written on success. |
 
 ---
 
@@ -191,7 +191,7 @@ Before calling Yahoo Finance, the job checks for a `PriceSnapshot` with `fetched
 - **`EvaluatePersonaJob`** — feature tested with faked Yahoo Finance responses and a mocked `AIEvaluator`. Assert correct job dispatches.
 - **`AIEvaluationJob`** — feature tested with a mocked Claude API response. Assert `ExecuteTradeJob` is dispatched with correctly modified signal.
 - **`ExecuteTradeJob`** — feature tested against a real SQLite test DB. Assert `Trade` created, `Position` updated, `Persona` `cash_balance` adjusted correctly.
-- **`PostWeeklyReportJob`** — feature tested with seeded `Trade`/`Position` data. Assert correct Discord webhook payload is built. HTTP call is faked via `Http::fake()`.
+- **`PostWeeklyReportJob`** — feature tested with seeded `Trade`/`Position` data. Assert correct Discord message payload is built and `DiscordService::postMessage()` is called. HTTP call is faked via `Http::fake()`.
 - **Market hours guard** — unit tested with fixed timestamps covering open, closed, and boundary cases.
 
 ---
@@ -209,10 +209,13 @@ Before calling Yahoo Finance, the job checks for a `PriceSnapshot` with `fetched
 - Response is parsed for action (approve/modify/reject) and rationale string
 - API key stored in `ANTHROPIC_API_KEY` env variable
 
-### Discord Webhook
-- No Discord bot or OAuth — simple incoming webhook POST
-- Webhook URL stored in `DISCORD_WEBHOOK_URL` env variable, accessed via `services.discord.webhook_url`
-- Payload formatted as a Discord embed with per-persona sections
+### Discord (Bot Token + REST API)
+- Laravel owns a `DiscordService` that posts messages directly via the Discord REST API (`POST /channels/{channel.id}/messages`)
+- Bot token stored in `DISCORD_BOT_TOKEN` env variable; target channel in `DISCORD_CHANNEL_ID`
+- Accessed via `services.discord.token` and `services.discord.channel_id` config keys
+- `DiscordService` is the single entry point for all Discord communication — keeps the HTTP details out of jobs
+- Payload formatted as Discord embeds with per-persona sections
+- **Future:** interaction handlers (slash commands, contextual replies) will extend `DiscordService` without changing the posting interface
 
 ---
 

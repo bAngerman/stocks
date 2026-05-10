@@ -37,7 +37,7 @@ Full architecture spec: `docs/superpowers/specs/2026-05-10-autotrader-design.md`
 
 - **Market data**: `scheb/yahoo-finance-api` — wrapped in `MarketDataService`. Never call the library directly from jobs or strategies.
 - **AI evaluation**: Claude API via Anthropic PHP SDK — wrapped in `AIEvaluator`. Key in `ANTHROPIC_API_KEY`.
-- **Discord**: Incoming webhook only (no bot/OAuth). URL in `DISCORD_WEBHOOK_URL` / `services.discord.webhook_url`. Weekly post every Friday at 12:00pm `America/Edmonton`.
+- **Discord**: Bot token + Discord REST API. `DiscordService` is the single entry point — posts to a channel via `POST /channels/{channel.id}/messages`. Token in `DISCORD_BOT_TOKEN`, channel in `DISCORD_CHANNEL_ID`. Weekly post every Friday at 12:00pm `America/Edmonton`. Future interaction handlers (slash commands) will extend `DiscordService` without changing its posting interface.
 
 === end project rules ===
 
