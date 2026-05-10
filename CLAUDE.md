@@ -29,6 +29,7 @@ Full architecture spec: `docs/superpowers/specs/2026-05-10-autotrader-design.md`
 
 - Strategy *types* are PHP classes (implementing `StrategyInterface`); strategy *instances* are Persona DB rows referencing a `StrategyType` enum case.
 - `ExecuteTradeJob` must never retry automatically — duplicate execution would double a trade.
+- Queue must run with a single worker to prevent concurrent `ExecuteTradeJob` instances from racing on `cash_balance` — no `lockForUpdate` is used intentionally to keep SQLite tests simple.
 - `PriceSnapshot` deduplication: always check for a snapshot within the current polling window before calling Yahoo Finance.
 - Market hours guard lives in `EvaluatePersonaJob` — no evaluation outside NYSE hours (9:30am–4:00pm ET, Mon–Fri).
 - Asset scope: **stocks and ETFs only** — no options, no crypto.
