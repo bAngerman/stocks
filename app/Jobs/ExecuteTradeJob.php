@@ -8,6 +8,7 @@ use App\Models\Trade;
 use App\Trading\TradeSignal;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ExecuteTradeJob implements ShouldQueue
@@ -47,27 +48,29 @@ class ExecuteTradeJob implements ShouldQueue
             return;
         }
 
-        $position = $this->persona->positions()
-            ->firstOrNew(['ticker' => $this->signal->ticker]);
+        DB::transaction(function () use ($totalCost) {
+            $position = $this->persona->positions()
+                ->firstOrNew(['ticker' => $this->signal->ticker]);
 
-        if (! $position->exists) {
-            $position->average_cost = $this->pricePerShare;
-            $position->shares = 0;
-            $position->opened_at = now();
-        } else {
-            $existingShares = (float) $position->shares;
-            $existingCost = (float) $position->average_cost;
-            $newShares = $this->signal->shares;
-            $position->average_cost = (($existingShares * $existingCost) + ($newShares * $this->pricePerShare)) / ($existingShares + $newShares);
-        }
+            if (! $position->exists) {
+                $position->average_cost = $this->pricePerShare;
+                $position->shares = 0;
+                $position->opened_at = now();
+            } else {
+                $existingShares = (float) $position->shares;
+                $existingCost = (float) $position->average_cost;
+                $newShares = $this->signal->shares;
+                $position->average_cost = (($existingShares * $existingCost) + ($newShares * $this->pricePerShare)) / ($existingShares + $newShares);
+            }
 
-        $position->shares = (float) $position->shares + $this->signal->shares;
-        $position->save();
+            $position->shares = (float) $position->shares + $this->signal->shares;
+            $position->save();
 
-        $this->persona->cash_balance = (float) $this->persona->cash_balance - $totalCost;
-        $this->persona->save();
+            $this->persona->cash_balance = (float) $this->persona->cash_balance - $totalCost;
+            $this->persona->save();
 
-        $this->recordTrade($this->signal->shares);
+            $this->recordTrade($this->signal->shares);
+        });
     }
 
     private function executeSell(): void
@@ -82,13 +85,15 @@ class ExecuteTradeJob implements ShouldQueue
 
         $sharesToSell = min($this->signal->shares, (float) $position->shares);
 
-        $position->shares = (float) $position->shares - $sharesToSell;
-        $position->save();
+        DB::transaction(function () use ($position, $sharesToSell) {
+            $position->shares = (float) $position->shares - $sharesToSell;
+            $position->save();
 
-        $this->persona->cash_balance = (float) $this->persona->cash_balance + ($sharesToSell * $this->pricePerShare);
-        $this->persona->save();
+            $this->persona->cash_balance = (float) $this->persona->cash_balance + ($sharesToSell * $this->pricePerShare);
+            $this->persona->save();
 
-        $this->recordTrade($sharesToSell);
+            $this->recordTrade($sharesToSell);
+        });
     }
 
     private function recordTrade(float $shares): void
