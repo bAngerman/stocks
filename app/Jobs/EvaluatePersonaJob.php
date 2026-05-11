@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\TickerStatus;
 use App\Models\Persona;
 use App\Models\PriceSnapshot;
 use App\Services\MarketDataService;
@@ -49,8 +50,13 @@ class EvaluatePersonaJob implements ShouldQueue
         $signal = $strategy->evaluate($this->persona, $snapshots);
 
         if (! $signal) {
+            $this->ageCandidates(null);
+
             return;
         }
+
+        $this->promoteIfCandidate($signal->ticker);
+        $this->ageCandidates($signal->ticker);
 
         $snapshot = $snapshots->firstWhere('ticker', $signal->ticker);
 
@@ -82,6 +88,33 @@ class EvaluatePersonaJob implements ShouldQueue
 
         // 570 = 9:30am, 960 = 4:00pm
         return $minutesFromMidnight >= 570 && $minutesFromMidnight < 960;
+    }
+
+    private function promoteIfCandidate(string $ticker): void
+    {
+        $isCandidate = $this->persona->candidateTickers()
+            ->where('ticker', $ticker)
+            ->exists();
+
+        if ($isCandidate) {
+            $this->persona->tickers()
+                ->where('ticker', $ticker)
+                ->update([
+                    'status' => TickerStatus::Active->value,
+                    'promoted_at' => now(),
+                ]);
+        }
+    }
+
+    private function ageCandidates(?string $signalTicker): void
+    {
+        $this->persona->candidateTickers()
+            ->when($signalTicker, fn ($q) => $q->where('ticker', '!=', $signalTicker))
+            ->increment('evaluations_without_signal');
+
+        $this->persona->candidateTickers()
+            ->where('evaluations_without_signal', '>=', 20)
+            ->delete();
     }
 
     private function getOrFetchSnapshots(array $tickers, MarketDataService $marketDataService): Collection
