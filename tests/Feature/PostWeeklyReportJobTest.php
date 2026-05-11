@@ -7,6 +7,7 @@ use App\Models\PersonaPortfolioSnapshot;
 use App\Models\Position;
 use App\Models\PriceSnapshot;
 use App\Models\Trade;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -278,6 +279,7 @@ it('snapshot total_value includes cash plus open position market values', functi
 });
 
 it('does not save snapshots if Discord post fails', function () {
+    Http::swap(new Factory);
     Http::fake(['discord.com/*' => Http::response(['message' => 'Error'], 500)]);
     Persona::factory()->create(['is_active' => true]);
 
@@ -294,6 +296,7 @@ it('logs a DiscordReport after successful post', function () {
 });
 
 it('does not log a DiscordReport if the Discord API call fails', function () {
+    Http::swap(new Factory);
     Http::fake(['discord.com/*' => Http::response(['message' => 'Error'], 500)]);
     Persona::factory()->create(['is_active' => true]);
 
