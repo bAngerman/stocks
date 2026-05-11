@@ -7,6 +7,7 @@ use App\Models\Position;
 use App\Models\PriceSnapshot;
 use App\Trading\Strategies\MeanReversionStrategy;
 use App\Trading\TradeSignal;
+use Carbon\Carbon;
 
 it('returns null when snapshot collection is empty', function () {
     $persona = Persona::factory()->create([
@@ -90,6 +91,43 @@ it('returns a buy signal when price is sufficiently below the historical mean', 
         ->and($signal->ticker)->toBe('AAPL')
         ->and($signal->action)->toBe(TradeAction::Buy)
         ->and($signal->shares)->toBe(2.0);
+});
+
+it('computes confidence as clamped deviation ratio', function () {
+    $persona = Persona::factory()->create([
+        'strategy_type' => StrategyType::MeanReversion,
+        'strategy_parameters' => [
+            'lookback_periods' => 5,
+            'min_data_points' => 3,
+            'deviation_threshold' => 5.0,
+            'shares_per_trade' => 2,
+            'ai_confidence_min' => 0.0,
+            'ai_confidence_max' => 0.5,
+        ],
+    ]);
+
+    // Create 3 historical snapshots with price 100 (mean = 100)
+    // Then current price = 90 → deviation = -10% → confidence = 10/(5*2) = 1.0 (clamped)
+    $baseTime = Carbon::parse('2026-05-12 14:00:00');
+    foreach (range(1, 3) as $i) {
+        PriceSnapshot::factory()->create([
+            'ticker' => 'AAPL',
+            'price' => '100.00',
+            'fetched_at' => $baseTime->copy()->subMinutes($i * 10),
+        ]);
+    }
+
+    $currentSnapshot = PriceSnapshot::factory()->create([
+        'ticker' => 'AAPL',
+        'price' => '90.00',
+        'fetched_at' => $baseTime,
+    ]);
+
+    $strategy = new MeanReversionStrategy;
+    $signal = $strategy->evaluate($persona, collect([$currentSnapshot]));
+
+    expect($signal)->not->toBeNull()
+        ->and($signal->confidence)->toBe(1.0);
 });
 
 it('returns null when price is within the deviation threshold', function () {

@@ -63,7 +63,7 @@ class MeanReversionStrategy implements StrategyInterface
                     );
                 }
             } elseif ($openPosition && $deviation > $deviationThreshold) {
-                $confidence = min($deviation / ($deviationThreshold * 2), 1.0);
+                $confidence = min(abs($deviation) / ($deviationThreshold * 2), 1.0);
                 if ($confidence > $bestConfidence) {
                     $bestConfidence = $confidence;
                     $formattedMean = number_format($mean, 2);
