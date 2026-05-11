@@ -22,12 +22,8 @@ class MomentumStrategy implements StrategyInterface
         $bestSignal = null;
         $bestConfidence = 0.0;
 
-        foreach ($params['tickers'] ?? [] as $ticker) {
-            $snapshot = $snapshots->firstWhere('ticker', $ticker);
-            if (! $snapshot) {
-                continue;
-            }
-
+        foreach ($snapshots as $snapshot) {
+            $ticker = $snapshot->ticker;
             $changePercent = (float) $snapshot->change_percent;
             $openPosition = $persona->openPositions()->where('ticker', $ticker)->first();
 
