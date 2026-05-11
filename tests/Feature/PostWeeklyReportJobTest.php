@@ -258,6 +258,20 @@ it('shows no trades this week when persona has none in the period', function () 
     });
 });
 
+it('excludes trades outside the reporting period from the trade count', function () {
+    $persona = Persona::factory()->create(['cash_balance' => 10000, 'is_active' => true]);
+    Trade::factory()->for($persona)->buy()->create(['executed_at' => now()->subDays(8)]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    Http::assertSent(function ($request) {
+        $fields = $request->data()['embeds'][1]['fields'];
+        $tradesField = collect($fields)->firstWhere('name', 'Weekly Trades');
+
+        return $tradesField['value'] === 'No trades this week';
+    });
+});
+
 it('saves one PersonaPortfolioSnapshot per persona after successful post', function () {
     Persona::factory()->count(3)->create(['is_active' => true]);
 

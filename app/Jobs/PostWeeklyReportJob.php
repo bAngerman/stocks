@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PostWeeklyReportJob implements ShouldQueue
 {
@@ -58,11 +59,16 @@ class PostWeeklyReportJob implements ShouldQueue
             $persona->id => $this->computeTotalValue($persona, $latestSnapshots),
         ]);
 
-        $previousSnapshots = PersonaPortfolioSnapshot::query()
-            ->whereIn('persona_id', $personas->pluck('id'))
-            ->latest('snapshotted_at')
+        $personaIds = $personas->pluck('id');
+
+        $latestSnapshotIds = PersonaPortfolioSnapshot::query()
+            ->selectRaw('MAX(id) as id')
+            ->whereIn('persona_id', $personaIds)
+            ->groupBy('persona_id')
+            ->pluck('id');
+
+        $previousSnapshots = PersonaPortfolioSnapshot::whereIn('id', $latestSnapshotIds)
             ->get()
-            ->unique('persona_id')
             ->keyBy('persona_id');
 
         $ranked = $personas->sortByDesc(fn (Persona $p) => $totalValues[$p->id])->values();
@@ -83,23 +89,25 @@ class PostWeeklyReportJob implements ShouldQueue
 
         $now = now();
 
-        PersonaPortfolioSnapshot::insert(
-            $personas->map(fn (Persona $persona) => [
-                'persona_id' => $persona->id,
-                'total_value' => $totalValues[$persona->id],
-                'cash_balance' => $persona->cash_balance,
-                'snapshotted_at' => $now,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ])->toArray()
-        );
+        DB::transaction(function () use ($personas, $totalValues, $now, $periodStart, $periodEnd, $embeds) {
+            PersonaPortfolioSnapshot::insert(
+                $personas->map(fn (Persona $persona) => [
+                    'persona_id' => $persona->id,
+                    'total_value' => $totalValues[$persona->id],
+                    'cash_balance' => $persona->cash_balance,
+                    'snapshotted_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->toArray()
+            );
 
-        DiscordReport::create([
-            'period_start' => $periodStart,
-            'period_end' => $periodEnd,
-            'payload' => ['embeds' => $embeds],
-            'posted_at' => $now,
-        ]);
+            DiscordReport::create([
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'payload' => ['embeds' => $embeds],
+                'posted_at' => $now,
+            ]);
+        });
     }
 
     private function computeTotalValue(Persona $persona, Collection $latestSnapshots): float
