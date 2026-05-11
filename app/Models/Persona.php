@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\StrategyType;
+use App\Enums\TickerStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,5 +41,20 @@ class Persona extends Model
     public function openPositions(): HasMany
     {
         return $this->positions()->where('shares', '>', 0);
+    }
+
+    public function tickers(): HasMany
+    {
+        return $this->hasMany(PersonaTicker::class);
+    }
+
+    public function activeTickers(): HasMany
+    {
+        return $this->hasMany(PersonaTicker::class)->where('status', TickerStatus::Active);
+    }
+
+    public function candidateTickers(): HasMany
+    {
+        return $this->hasMany(PersonaTicker::class)->where('status', TickerStatus::Candidate);
     }
 }
