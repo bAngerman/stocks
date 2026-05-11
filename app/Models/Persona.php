@@ -57,4 +57,9 @@ class Persona extends Model
     {
         return $this->hasMany(PersonaTicker::class)->where('status', TickerStatus::Candidate);
     }
+
+    public function portfolioSnapshots(): HasMany
+    {
+        return $this->hasMany(PersonaPortfolioSnapshot::class);
+    }
 }
