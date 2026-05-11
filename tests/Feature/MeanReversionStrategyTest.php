@@ -10,7 +10,7 @@ use App\Trading\TradeSignal;
 use Carbon\Carbon;
 
 it('returns null when snapshot collection is empty', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -26,7 +26,7 @@ it('returns null when snapshot collection is empty', function () {
 });
 
 it('returns null when fewer than min_data_points historical snapshots exist', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -40,7 +40,6 @@ it('returns null when fewer than min_data_points historical snapshots exist', fu
 
     $base = now();
 
-    // Only 3 historical snapshots — below min_data_points of 5
     foreach (range(1, 3) as $i) {
         PriceSnapshot::factory()->forTicker('AAPL')->create([
             'price' => 100.00,
@@ -57,7 +56,7 @@ it('returns null when fewer than min_data_points historical snapshots exist', fu
 });
 
 it('returns a buy signal when price is sufficiently below the historical mean', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -71,7 +70,6 @@ it('returns a buy signal when price is sufficiently below the historical mean', 
 
     $base = now();
 
-    // 10 historical snapshots at $100 each → mean = $100
     foreach (range(1, 10) as $i) {
         PriceSnapshot::factory()->forTicker('AAPL')->create([
             'price' => 100.00,
@@ -79,7 +77,6 @@ it('returns a buy signal when price is sufficiently below the historical mean', 
         ]);
     }
 
-    // Current price $94 → deviation = (94 - 100) / 100 * 100 = -6% → exceeds 3% threshold
     $current = PriceSnapshot::factory()->forTicker('AAPL')->create([
         'price' => 94.00,
         'fetched_at' => $base,
@@ -94,7 +91,7 @@ it('returns a buy signal when price is sufficiently below the historical mean', 
 });
 
 it('computes confidence as clamped deviation ratio', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 5,
@@ -106,19 +103,16 @@ it('computes confidence as clamped deviation ratio', function () {
         ],
     ]);
 
-    // Create 3 historical snapshots with price 100 (mean = 100)
-    // Then current price = 90 → deviation = -10% → confidence = 10/(5*2) = 1.0 (clamped)
+    // mean = 100, current = 90 → deviation = -10% → confidence = 10 / (5 * 2) = 1.0 (clamped)
     $baseTime = Carbon::parse('2026-05-12 14:00:00');
     foreach (range(1, 3) as $i) {
-        PriceSnapshot::factory()->create([
-            'ticker' => 'AAPL',
+        PriceSnapshot::factory()->forTicker('AAPL')->create([
             'price' => '100.00',
             'fetched_at' => $baseTime->copy()->subMinutes($i * 10),
         ]);
     }
 
-    $currentSnapshot = PriceSnapshot::factory()->create([
-        'ticker' => 'AAPL',
+    $currentSnapshot = PriceSnapshot::factory()->forTicker('AAPL')->create([
         'price' => '90.00',
         'fetched_at' => $baseTime,
     ]);
@@ -131,7 +125,7 @@ it('computes confidence as clamped deviation ratio', function () {
 });
 
 it('returns null when price is within the deviation threshold', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -152,7 +146,6 @@ it('returns null when price is within the deviation threshold', function () {
         ]);
     }
 
-    // Current price $98.5 → deviation = -1.5% → within ±3% threshold
     $current = PriceSnapshot::factory()->forTicker('AAPL')->create([
         'price' => 98.50,
         'fetched_at' => $base,
@@ -162,7 +155,7 @@ it('returns null when price is within the deviation threshold', function () {
 });
 
 it('returns a sell signal when price is sufficiently above the mean and a position is held', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -189,7 +182,6 @@ it('returns a sell signal when price is sufficiently above the mean and a positi
         ]);
     }
 
-    // Current price $107 → deviation = +7% → exceeds 3% threshold
     $current = PriceSnapshot::factory()->forTicker('AAPL')->create([
         'price' => 107.00,
         'fetched_at' => $base,
@@ -203,7 +195,7 @@ it('returns a sell signal when price is sufficiently above the mean and a positi
 });
 
 it('does not return a buy signal when a position is already held', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -235,7 +227,7 @@ it('does not return a buy signal when a position is already held', function () {
 });
 
 it('returns the highest-confidence signal when multiple tickers qualify', function () {
-    $persona = Persona::factory()->create([
+    $persona = Persona::factory()->withTickers(['AAPL', 'MSFT'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -275,8 +267,8 @@ it('returns the highest-confidence signal when multiple tickers qualify', functi
         ->and($signal->ticker)->toBe('AAPL');
 });
 
-it('sets shouldConsultAI based on confidence bounds', function () {
-    $persona = Persona::factory()->create([
+it('sets shouldConsultAI false when confidence is above the borderline range', function () {
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
         'strategy_type' => StrategyType::MeanReversion,
         'strategy_parameters' => [
             'lookback_periods' => 10,
@@ -307,4 +299,38 @@ it('sets shouldConsultAI based on confidence bounds', function () {
 
     expect($signal)->not->toBeNull()
         ->and($signal->shouldConsultAI)->toBeFalse();
+});
+
+it('sets shouldConsultAI true when confidence falls in the borderline range', function () {
+    $persona = Persona::factory()->withTickers(['AAPL'])->create([
+        'strategy_type' => StrategyType::MeanReversion,
+        'strategy_parameters' => [
+            'lookback_periods' => 10,
+            'min_data_points' => 5,
+            'deviation_threshold' => 3.0,
+            'shares_per_trade' => 1,
+            'ai_confidence_min' => 0.4,
+            'ai_confidence_max' => 0.7,
+        ],
+    ]);
+
+    $base = now();
+
+    foreach (range(1, 10) as $i) {
+        PriceSnapshot::factory()->forTicker('AAPL')->create([
+            'price' => 100.00,
+            'fetched_at' => $base->copy()->subMinutes($i * 15),
+        ]);
+    }
+
+    // deviation = -4% → confidence = min(4.0 / 6.0, 1.0) = 0.67 → inside [0.4, 0.7]
+    $current = PriceSnapshot::factory()->forTicker('AAPL')->create([
+        'price' => 96.00,
+        'fetched_at' => $base,
+    ]);
+
+    $signal = (new MeanReversionStrategy)->evaluate($persona, collect([$current]));
+
+    expect($signal)->not->toBeNull()
+        ->and($signal->shouldConsultAI)->toBeTrue();
 });
