@@ -24,7 +24,11 @@ class EvaluatePersonaJob implements ShouldQueue
             return;
         }
 
-        $tickers = $this->persona->strategy_parameters['tickers'] ?? [];
+        $tickers = $this->persona->activeTickers->pluck('ticker')
+            ->merge($this->persona->candidateTickers->pluck('ticker'))
+            ->unique()
+            ->values()
+            ->all();
 
         if (empty($tickers)) {
             return;
