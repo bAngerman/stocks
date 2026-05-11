@@ -61,8 +61,10 @@ it('ranks personas by total portfolio value descending in the header', function 
 
     Http::assertSent(function ($request) {
         $description = $request->data()['embeds'][0]['description'];
+        $richPos = strpos($description, 'Rich Bot');
+        $poorPos = strpos($description, 'Poor Bot');
 
-        return strpos($description, 'Rich Bot') < strpos($description, 'Poor Bot');
+        return $richPos !== false && $poorPos !== false && $richPos < $poorPos;
     });
 });
 
@@ -236,7 +238,7 @@ it('shows weekly trade count in persona embed', function () {
         $fields = $request->data()['embeds'][1]['fields'];
         $tradesField = collect($fields)->firstWhere('name', 'Weekly Trades');
 
-        return str_contains($tradesField['value'], '3')
+        return str_contains($tradesField['value'], '3  (')
             && str_contains($tradesField['value'], '2 buys')
             && str_contains($tradesField['value'], '1 sells');
     });
@@ -279,7 +281,7 @@ it('does not save snapshots if Discord post fails', function () {
     Http::fake(['discord.com/*' => Http::response(['message' => 'Error'], 500)]);
     Persona::factory()->create(['is_active' => true]);
 
-    expect(fn () => PostWeeklyReportJob::dispatchSync())->toThrow(\Exception::class);
+    expect(fn () => PostWeeklyReportJob::dispatchSync())->toThrow(Exception::class);
     expect(PersonaPortfolioSnapshot::count())->toBe(0);
 });
 
@@ -295,6 +297,6 @@ it('does not log a DiscordReport if the Discord API call fails', function () {
     Http::fake(['discord.com/*' => Http::response(['message' => 'Error'], 500)]);
     Persona::factory()->create(['is_active' => true]);
 
-    expect(fn () => PostWeeklyReportJob::dispatchSync())->toThrow(\Exception::class);
+    expect(fn () => PostWeeklyReportJob::dispatchSync())->toThrow(Exception::class);
     expect(DiscordReport::count())->toBe(0);
 });
