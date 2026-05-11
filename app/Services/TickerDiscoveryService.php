@@ -34,7 +34,7 @@ class TickerDiscoveryService
 
             $text = $response->json('content.0.text', '');
 
-            preg_match('/\[.*?\]/s', $text, $matches);
+            preg_match('/\[.*\]/s', $text, $matches);
 
             if (empty($matches[0])) {
                 return [];
