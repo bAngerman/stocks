@@ -50,6 +50,7 @@ class PostWeeklyReportJob implements ShouldQueue
         $latestSnapshots = $tickers->isEmpty()
             ? collect()
             : PriceSnapshot::whereIn('ticker', $tickers)
+                ->where('fetched_at', '>=', now()->subDay())
                 ->orderByDesc('fetched_at')
                 ->get()
                 ->unique('ticker')
@@ -209,6 +210,7 @@ class PostWeeklyReportJob implements ShouldQueue
         $strategyLabel = match ($persona->strategy_type) {
             StrategyType::Momentum => '📈 Momentum',
             StrategyType::MeanReversion => '🔄 Mean Reversion',
+            default => $persona->strategy_type->value,
         };
 
         $positionsValue = $persona->openPositions->isEmpty()
