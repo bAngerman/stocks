@@ -2,14 +2,12 @@
 
 namespace App\Models;
 
-use Database\Factories\PersonaPortfolioSnapshotFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PersonaPortfolioSnapshot extends Model
 {
-    /** @use HasFactory<PersonaPortfolioSnapshotFactory> */
     use HasFactory;
 
     protected $fillable = [
