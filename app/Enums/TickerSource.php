@@ -4,6 +4,6 @@ namespace App\Enums;
 
 enum TickerSource: string
 {
-    case Initial = 'Initial';
-    case AiDiscovered = 'AiDiscovered';
+    case Initial = 'initial';
+    case AiDiscovered = 'ai_discovered';
 }

@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('persona_id')->constrained()->cascadeOnDelete();
             $table->string('ticker');
-            $table->string('status')->default('Active');
-            $table->string('source')->default('Initial');
+            $table->string('status')->default('active');
+            $table->string('source')->default('initial');
             $table->text('ai_rationale')->nullable();
             $table->integer('evaluations_without_signal')->default(0);
             $table->timestamp('promoted_at')->nullable();
