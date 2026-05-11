@@ -3,6 +3,7 @@
 use App\Jobs\DiscoverTickersJob;
 use App\Jobs\EvaluatePersonaJob;
 use App\Jobs\PostWeeklyReportJob;
+use App\Jobs\SyncGainersJob;
 use App\Models\Persona;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -29,6 +30,14 @@ Schedule::job(new PostWeeklyReportJob)
     ->weeklyOn(5, '12:00')
     ->timezone('America/Edmonton')
     ->name('trading:weekly-report')
+    ->withoutOverlapping();
+
+// Sync top daily equity gainers as candidate tickers — weekdays at 9:00am ET before market open.
+Schedule::job(new SyncGainersJob)
+    ->weekdays()
+    ->dailyAt('9:00')
+    ->timezone('America/New_York')
+    ->name('trading:sync-gainers')
     ->withoutOverlapping();
 
 // Dispatch ticker discovery for each active persona every Monday at 9am ET.
