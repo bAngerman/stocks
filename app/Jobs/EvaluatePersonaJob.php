@@ -15,6 +15,8 @@ class EvaluatePersonaJob implements ShouldQueue
 {
     use Queueable;
 
+    private const CANDIDATE_MAX_EVALUATIONS = 20;
+
     public int $tries = 3;
 
     public function __construct(public readonly Persona $persona) {}
@@ -113,7 +115,7 @@ class EvaluatePersonaJob implements ShouldQueue
             ->increment('evaluations_without_signal');
 
         $this->persona->candidateTickers()
-            ->where('evaluations_without_signal', '>=', 20)
+            ->where('evaluations_without_signal', '>=', self::CANDIDATE_MAX_EVALUATIONS)
             ->delete();
     }
 

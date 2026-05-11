@@ -173,6 +173,8 @@ it('promotes a candidate ticker to active when it generates a signal', function 
     expect($persona->candidateTickers)->toHaveCount(0)
         ->and($persona->activeTickers->where('ticker', 'NVDA'))->toHaveCount(1)
         ->and($persona->tickers->firstWhere('ticker', 'NVDA')->promoted_at)->not->toBeNull();
+
+    Bus::assertDispatched(ExecuteTradeJob::class);
 });
 
 it('increments evaluations_without_signal on candidates that produced no signal', function () {
