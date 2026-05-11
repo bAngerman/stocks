@@ -1,6 +1,5 @@
 <?php
 
-use App\Jobs\DiscoverTickersJob;
 use App\Jobs\EvaluatePersonaJob;
 use App\Jobs\PostWeeklyReportJob;
 use App\Jobs\SyncGainersJob;
@@ -38,14 +37,4 @@ Schedule::job(new SyncGainersJob)
     ->dailyAt('9:00')
     ->timezone('America/New_York')
     ->name('trading:sync-gainers')
-    ->withoutOverlapping();
-
-// Dispatch ticker discovery for each active persona every Monday at 9am ET.
-Schedule::call(function () {
-    Persona::where('is_active', true)
-        ->each(fn (Persona $persona) => DiscoverTickersJob::dispatch($persona));
-})
-    ->weeklyOn(1, '9:00')
-    ->timezone('America/New_York')
-    ->name('trading:discover-tickers')
     ->withoutOverlapping();
