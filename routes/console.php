@@ -4,24 +4,13 @@ use App\Jobs\EvaluatePersonaJob;
 use App\Jobs\PostWeeklyReportJob;
 use App\Jobs\SyncGainersJob;
 use App\Models\Persona;
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
-// Artisan::command('inspire', function () {
-//     $this->comment(Inspiring::quote());
-// })->purpose('Display an inspiring quote');
-
-// Temporary heartbeat — confirms the scheduler is running on the remote environment.
-Schedule::call(function () {
-    Log::info('scheduler:heartbeat', ['time' => now()->toIso8601String()]);
-})
-    ->everyFiveMinutes()
-    ->name('scheduler:heartbeat');
-
 // Dispatch one evaluation job per active persona every 15 minutes during NYSE hours.
 Schedule::call(function () {
+    $count = Persona::where('is_active', true)->count();
+    Log::info('trading:evaluate-personas fired', ['active_personas' => $count]);
     Persona::where('is_active', true)
         ->each(fn (Persona $persona) => EvaluatePersonaJob::dispatch($persona));
 })
@@ -29,20 +18,17 @@ Schedule::call(function () {
     ->weekdays()
     ->between('9:30', '16:00')
     ->timezone('America/New_York')
-    ->name('trading:evaluate-personas')
-    ->withoutOverlapping();
+    ->name('trading:evaluate-personas');
 
 // Post weekly summary every Friday at noon MT.
 Schedule::job(new PostWeeklyReportJob)
     ->weeklyOn(5, '12:00')
     ->timezone('America/Edmonton')
-    ->name('trading:weekly-report')
-    ->withoutOverlapping();
+    ->name('trading:weekly-report');
 
 // Sync top daily equity gainers as candidate tickers — weekdays at 9:00am ET before market open.
 Schedule::job(new SyncGainersJob)
     ->weekdays()
     ->dailyAt('9:00')
     ->timezone('America/New_York')
-    ->name('trading:sync-gainers')
-    ->withoutOverlapping();
+    ->name('trading:sync-gainers');
