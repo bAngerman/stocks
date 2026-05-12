@@ -2,18 +2,20 @@
 
 use App\Services\MarketDataService;
 use App\Trading\MarketQuote;
-use Scheb\YahooFinanceApi\ApiClient;
-use Scheb\YahooFinanceApi\Results\Quote;
+use Illuminate\Support\Facades\Http;
 
-it('returns a MarketQuote DTO from a Yahoo Finance quote', function () {
-    $mockQuote = Mockery::mock(Quote::class);
-    $mockQuote->shouldReceive('getRegularMarketPrice')->andReturn(150.25);
-    $mockQuote->shouldReceive('getRegularMarketChangePercent')->andReturn(2.35);
-
-    $mockClient = Mockery::mock(ApiClient::class);
-    $mockClient->shouldReceive('getQuote')->with('AAPL')->andReturn($mockQuote);
-
-    $this->app->instance(ApiClient::class, $mockClient);
+it('returns a MarketQuote DTO from a Polygon snapshot', function () {
+    Http::fake([
+        'api.polygon.io/*' => Http::response([
+            'status' => 'OK',
+            'ticker' => [
+                'ticker' => 'AAPL',
+                'todaysChangePerc' => 2.35,
+                'lastTrade' => ['p' => 150.25],
+                'day' => ['c' => 150.0],
+            ],
+        ], 200),
+    ]);
 
     $quote = app(MarketDataService::class)->getQuote('AAPL');
 
@@ -24,23 +26,32 @@ it('returns a MarketQuote DTO from a Yahoo Finance quote', function () {
 });
 
 it('returns a collection of MarketQuotes for multiple tickers', function () {
-    $mockAapl = Mockery::mock(Quote::class);
-    $mockAapl->shouldReceive('getRegularMarketPrice')->andReturn(150.0);
-    $mockAapl->shouldReceive('getRegularMarketChangePercent')->andReturn(1.0);
-
-    $mockMsft = Mockery::mock(Quote::class);
-    $mockMsft->shouldReceive('getRegularMarketPrice')->andReturn(420.0);
-    $mockMsft->shouldReceive('getRegularMarketChangePercent')->andReturn(-0.5);
-
-    $mockClient = Mockery::mock(ApiClient::class);
-    $mockClient->shouldReceive('getQuote')->with('AAPL')->andReturn($mockAapl);
-    $mockClient->shouldReceive('getQuote')->with('MSFT')->andReturn($mockMsft);
-
-    $this->app->instance(ApiClient::class, $mockClient);
+    Http::fake([
+        'api.polygon.io/*/tickers/AAPL' => Http::response([
+            'status' => 'OK',
+            'ticker' => [
+                'ticker' => 'AAPL',
+                'todaysChangePerc' => 1.0,
+                'lastTrade' => ['p' => 150.0],
+                'day' => ['c' => 150.0],
+            ],
+        ], 200),
+        'api.polygon.io/*/tickers/MSFT' => Http::response([
+            'status' => 'OK',
+            'ticker' => [
+                'ticker' => 'MSFT',
+                'todaysChangePerc' => -0.5,
+                'lastTrade' => ['p' => 420.0],
+                'day' => ['c' => 420.0],
+            ],
+        ], 200),
+    ]);
 
     $quotes = app(MarketDataService::class)->getQuotes(['AAPL', 'MSFT']);
 
     expect($quotes)->toHaveCount(2)
         ->and($quotes->first()->ticker)->toBe('AAPL')
-        ->and($quotes->last()->ticker)->toBe('MSFT');
+        ->and($quotes->first()->price)->toBe(150.0)
+        ->and($quotes->last()->ticker)->toBe('MSFT')
+        ->and($quotes->last()->price)->toBe(420.0);
 });

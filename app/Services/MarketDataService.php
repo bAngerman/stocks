@@ -6,20 +6,29 @@ use App\Trading\MarketQuote;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Scheb\YahooFinanceApi\ApiClient;
 
 class MarketDataService
 {
-    public function __construct(private readonly ApiClient $client) {}
+    private string $apiKey;
+
+    public function __construct()
+    {
+        $this->apiKey = config('services.polygon.key');
+    }
 
     public function getQuote(string $ticker): MarketQuote
     {
-        $quote = $this->client->getQuote($ticker);
+        $response = Http::withToken($this->apiKey)
+            ->get("https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{$ticker}")
+            ->throw()
+            ->json();
+
+        $snapshot = $response['ticker'];
 
         return new MarketQuote(
             ticker: $ticker,
-            price: $quote->getRegularMarketPrice(),
-            changePercent: $quote->getRegularMarketChangePercent(),
+            price: (float) ($snapshot['lastTrade']['p'] ?? $snapshot['day']['c']),
+            changePercent: (float) ($snapshot['todaysChangePerc'] ?? 0.0),
             fetchedAt: now(),
         );
     }
@@ -36,37 +45,20 @@ class MarketDataService
     public function getGainers(int $limit = 25): Collection
     {
         try {
-            $response = Http::withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language' => 'en-US,en;q=0.5',
-            ])->timeout(15)->get('https://finance.yahoo.com/markets/stocks/gainers/');
+            $response = Http::withToken($this->apiKey)
+                ->timeout(15)
+                ->get('https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers');
 
             if ($response->failed()) {
                 return collect();
             }
 
-            preg_match('/trending-tickers">(\\[.*?\\])<\\/script/s', $response->body(), $matches);
-
-            if (empty($matches[1])) {
-                return collect();
-            }
-
-            $data = json_decode($matches[1], true);
-
-            if (! is_array($data)) {
-                return collect();
-            }
-
-            return collect($data)
-                ->filter(fn ($item) => ($item['quoteType'] ?? '') === 'EQUITY')
-                ->filter(fn ($item) => ! empty($item['symbol']))
-                ->sortByDesc(fn ($item) => $item['regularMarketChangePercent']['raw'] ?? 0.0)
+            return collect($response->json('tickers') ?? [])
                 ->take($limit)
-                ->map(fn ($item) => [
-                    'ticker' => $item['symbol'],
-                    'changePercent' => (float) ($item['regularMarketChangePercent']['raw'] ?? 0.0),
-                    'name' => $item['shortName'] ?? $item['symbol'],
+                ->map(fn (array $item) => [
+                    'ticker' => $item['ticker'],
+                    'changePercent' => (float) ($item['todaysChangePerc'] ?? 0.0),
+                    'name' => $item['ticker'],
                 ])
                 ->values();
         } catch (\Throwable $e) {
