@@ -16,19 +16,19 @@ Schedule::call(function () {
 })
     ->everyFifteenMinutes()
     ->weekdays()
-    ->between('9:30', '16:00')
     ->timezone('America/New_York')
+    ->between('9:30', '16:00')
     ->name('trading:evaluate-personas');
 
 // Post weekly summary every Friday at noon MT.
 Schedule::job(new PostWeeklyReportJob)
-    ->weeklyOn(5, '12:00')
     ->timezone('America/Edmonton')
+    ->weeklyOn(5, '12:00')
     ->name('trading:weekly-report');
 
 // Sync top daily equity gainers as candidate tickers — weekdays at 9:00am ET before market open.
 Schedule::job(new SyncGainersJob)
     ->weekdays()
-    ->dailyAt('9:00')
     ->timezone('America/New_York')
+    ->dailyAt('9:00')
     ->name('trading:sync-gainers');
