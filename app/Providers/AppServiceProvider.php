@@ -14,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ApiClient::class, fn () => ApiClientFactory::createApiClient());
 
-        $this->app->singleton(MarketDataService::class, fn ($app) => new MarketDataService($app->make(ApiClient::class)));
+        $this->app->singleton(MarketDataService::class, fn () => new MarketDataService);
 
         // DiscordService constructor: __construct(string $token, string $channelId)
         $this->app->singleton(DiscordService::class, fn ($app) => new DiscordService(

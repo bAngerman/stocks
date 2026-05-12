@@ -2,6 +2,7 @@
 
 use App\Services\MarketDataService;
 use App\Trading\MarketQuote;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 it('returns a MarketQuote DTO from a Polygon snapshot', function () {
@@ -54,4 +55,13 @@ it('returns a collection of MarketQuotes for multiple tickers', function () {
         ->and($quotes->first()->price)->toBe(150.0)
         ->and($quotes->last()->ticker)->toBe('MSFT')
         ->and($quotes->last()->price)->toBe(420.0);
+});
+
+it('throws on HTTP failure for getQuote', function () {
+    Http::fake([
+        'api.polygon.io/*' => Http::response('', 500),
+    ]);
+
+    expect(fn () => app(MarketDataService::class)->getQuote('AAPL'))
+        ->toThrow(RequestException::class);
 });

@@ -54,6 +54,7 @@ class MarketDataService
             }
 
             return collect($response->json('tickers') ?? [])
+                ->sortByDesc(fn (array $item) => $item['todaysChangePerc'] ?? 0.0)
                 ->take($limit)
                 ->map(fn (array $item) => [
                     'ticker' => $item['ticker'],

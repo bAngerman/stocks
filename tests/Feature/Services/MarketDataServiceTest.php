@@ -20,7 +20,7 @@ it('returns top equity gainers sorted by change percent descending', function ()
     expect($results)->toHaveCount(3)
         ->and($results->first()['ticker'])->toBe('NVDA')
         ->and($results->first()['changePercent'])->toBe(25.0)
-        ->and($results->last()['ticker'])->toBe('MSFT');
+        ->and($results->last()['ticker'])->toBe('AAPL');
 });
 
 it('filters out non-equity instruments', function () {
