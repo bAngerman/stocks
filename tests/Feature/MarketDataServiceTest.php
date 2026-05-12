@@ -5,16 +5,16 @@ use App\Trading\MarketQuote;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
-it('returns a MarketQuote DTO from a Polygon snapshot', function () {
+it('returns a MarketQuote DTO from a Finnhub quote response', function () {
     Http::fake([
-        'api.polygon.io/*' => Http::response([
-            'status' => 'OK',
-            'ticker' => [
-                'ticker' => 'AAPL',
-                'todaysChangePerc' => 2.35,
-                'lastTrade' => ['p' => 150.25],
-                'day' => ['c' => 150.0],
-            ],
+        'finnhub.io/api/v1/quote*' => Http::response([
+            'c' => 150.25,
+            'dp' => 2.35,
+            'h' => 152.0,
+            'l' => 148.0,
+            'o' => 149.0,
+            'pc' => 147.0,
+            't' => 1716000000,
         ], 200),
     ]);
 
@@ -28,23 +28,11 @@ it('returns a MarketQuote DTO from a Polygon snapshot', function () {
 
 it('returns a collection of MarketQuotes for multiple tickers', function () {
     Http::fake([
-        'api.polygon.io/*/tickers/AAPL' => Http::response([
-            'status' => 'OK',
-            'ticker' => [
-                'ticker' => 'AAPL',
-                'todaysChangePerc' => 1.0,
-                'lastTrade' => ['p' => 150.0],
-                'day' => ['c' => 150.0],
-            ],
+        'finnhub.io/api/v1/quote?symbol=AAPL*' => Http::response([
+            'c' => 150.0, 'dp' => 1.0, 'h' => 152.0, 'l' => 148.0, 'o' => 149.0, 'pc' => 148.5, 't' => 1716000000,
         ], 200),
-        'api.polygon.io/*/tickers/MSFT' => Http::response([
-            'status' => 'OK',
-            'ticker' => [
-                'ticker' => 'MSFT',
-                'todaysChangePerc' => -0.5,
-                'lastTrade' => ['p' => 420.0],
-                'day' => ['c' => 420.0],
-            ],
+        'finnhub.io/api/v1/quote?symbol=MSFT*' => Http::response([
+            'c' => 420.0, 'dp' => -0.5, 'h' => 425.0, 'l' => 418.0, 'o' => 421.0, 'pc' => 422.0, 't' => 1716000000,
         ], 200),
     ]);
 
@@ -59,7 +47,7 @@ it('returns a collection of MarketQuotes for multiple tickers', function () {
 
 it('throws on HTTP failure for getQuote', function () {
     Http::fake([
-        'api.polygon.io/*' => Http::response('', 500),
+        'finnhub.io/api/v1/quote*' => Http::response('', 500),
     ]);
 
     expect(fn () => app(MarketDataService::class)->getQuote('AAPL'))

@@ -11,24 +11,26 @@ class MarketDataService
 {
     private string $apiKey;
 
+    /** @var string[] */
+    private array $watchlist;
+
     public function __construct()
     {
-        $this->apiKey = config('services.polygon.key');
+        $this->apiKey = config('services.finnhub.key');
+        $this->watchlist = config('services.finnhub.watchlist', []);
     }
 
     public function getQuote(string $ticker): MarketQuote
     {
         $response = Http::withToken($this->apiKey)
-            ->get("https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{$ticker}")
+            ->get('https://finnhub.io/api/v1/quote', ['symbol' => $ticker])
             ->throw()
             ->json();
 
-        $snapshot = $response['ticker'];
-
         return new MarketQuote(
             ticker: $ticker,
-            price: (float) ($snapshot['lastTrade']['p'] ?? $snapshot['day']['c']),
-            changePercent: (float) ($snapshot['todaysChangePerc'] ?? 0.0),
+            price: (float) $response['c'],
+            changePercent: (float) $response['dp'],
             fetchedAt: now(),
         );
     }
@@ -44,28 +46,32 @@ class MarketDataService
      */
     public function getGainers(int $limit = 25): Collection
     {
-        try {
-            $response = Http::withToken($this->apiKey)
-                ->timeout(15)
-                ->get('https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers');
-
-            if ($response->failed()) {
-                return collect();
-            }
-
-            return collect($response->json('tickers') ?? [])
-                ->sortByDesc(fn (array $item) => $item['todaysChangePerc'] ?? 0.0)
-                ->take($limit)
-                ->map(fn (array $item) => [
-                    'ticker' => $item['ticker'],
-                    'changePercent' => (float) ($item['todaysChangePerc'] ?? 0.0),
-                    'name' => $item['ticker'],
-                ])
-                ->values();
-        } catch (\Throwable $e) {
-            Log::warning('MarketDataService: getGainers failed', ['error' => $e->getMessage()]);
-
+        if (empty($this->watchlist)) {
             return collect();
         }
+
+        return collect($this->watchlist)
+            ->map(function (string $ticker) {
+                try {
+                    $quote = $this->getQuote($ticker);
+
+                    return [
+                        'ticker' => $quote->ticker,
+                        'changePercent' => $quote->changePercent,
+                        'name' => $quote->ticker,
+                    ];
+                } catch (\Throwable $e) {
+                    Log::warning('MarketDataService: getGainers quote failed', [
+                        'ticker' => $ticker,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    return null;
+                }
+            })
+            ->filter()
+            ->sortByDesc(fn (array $item) => $item['changePercent'])
+            ->take($limit)
+            ->values();
     }
 }

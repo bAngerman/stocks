@@ -3,17 +3,14 @@
 use App\Services\MarketDataService;
 use Illuminate\Support\Facades\Http;
 
-it('returns top equity gainers sorted by change percent descending', function () {
+it('returns top gainers from watchlist sorted by change percent descending', function () {
     Http::fake([
-        'api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers' => Http::response([
-            'status' => 'OK',
-            'tickers' => [
-                ['ticker' => 'NVDA', 'todaysChangePerc' => 25.0],
-                ['ticker' => 'AAPL', 'todaysChangePerc' => 5.0],
-                ['ticker' => 'MSFT', 'todaysChangePerc' => 10.0],
-            ],
-        ], 200),
+        'finnhub.io/api/v1/quote?symbol=NVDA*' => Http::response(['c' => 900.0, 'dp' => 25.0, 'h' => 910.0, 'l' => 880.0, 'o' => 882.0, 'pc' => 720.0, 't' => 1716000000], 200),
+        'finnhub.io/api/v1/quote?symbol=MSFT*' => Http::response(['c' => 420.0, 'dp' => 10.0, 'h' => 425.0, 'l' => 415.0, 'o' => 416.0, 'pc' => 381.0, 't' => 1716000000], 200),
+        'finnhub.io/api/v1/quote?symbol=AAPL*' => Http::response(['c' => 150.0, 'dp' => 5.0, 'h' => 152.0, 'l' => 148.0, 'o' => 143.0, 'pc' => 142.5, 't' => 1716000000], 200),
     ]);
+
+    config(['services.finnhub.watchlist' => ['NVDA', 'MSFT', 'AAPL']]);
 
     $results = app(MarketDataService::class)->getGainers(limit: 3);
 
@@ -23,57 +20,34 @@ it('returns top equity gainers sorted by change percent descending', function ()
         ->and($results->last()['ticker'])->toBe('AAPL');
 });
 
-it('filters out non-equity instruments', function () {
-    Http::fake([
-        'api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers' => Http::response([
-            'status' => 'OK',
-            'tickers' => [
-                ['ticker' => 'NVDA', 'todaysChangePerc' => 20.0],
-                ['ticker' => 'BTC-USD', 'todaysChangePerc' => 50.0],
-            ],
-        ], 200),
-    ]);
-
-    $results = app(MarketDataService::class)->getGainers();
-
-    // Note: Polygon endpoint is expected to return only equities, so we'll get both
-    // Adjust expectation based on Polygon's actual response
-    expect($results)->toHaveCount(2);
-});
-
 it('respects the limit parameter', function () {
     Http::fake([
-        'api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers' => Http::response([
-            'status' => 'OK',
-            'tickers' => [
-                ['ticker' => 'A', 'todaysChangePerc' => 30.0],
-                ['ticker' => 'B', 'todaysChangePerc' => 20.0],
-                ['ticker' => 'C', 'todaysChangePerc' => 10.0],
-                ['ticker' => 'D', 'todaysChangePerc' => 5.0],
-            ],
-        ], 200),
+        'finnhub.io/api/v1/quote?symbol=NVDA*' => Http::response(['c' => 900.0, 'dp' => 30.0, 'h' => 910.0, 'l' => 880.0, 'o' => 882.0, 'pc' => 692.0, 't' => 1716000000], 200),
+        'finnhub.io/api/v1/quote?symbol=MSFT*' => Http::response(['c' => 420.0, 'dp' => 20.0, 'h' => 425.0, 'l' => 415.0, 'o' => 350.0, 'pc' => 350.0, 't' => 1716000000], 200),
+        'finnhub.io/api/v1/quote?symbol=AAPL*' => Http::response(['c' => 150.0, 'dp' => 10.0, 'h' => 152.0, 'l' => 148.0, 'o' => 136.4, 'pc' => 136.4, 't' => 1716000000], 200),
+        'finnhub.io/api/v1/quote?symbol=TSLA*' => Http::response(['c' => 200.0, 'dp' => 5.0, 'h' => 205.0, 'l' => 195.0, 'o' => 190.5, 'pc' => 190.5, 't' => 1716000000], 200),
     ]);
+
+    config(['services.finnhub.watchlist' => ['NVDA', 'MSFT', 'AAPL', 'TSLA']]);
 
     $results = app(MarketDataService::class)->getGainers(limit: 2);
 
     expect($results)->toHaveCount(2)
-        ->and($results->pluck('ticker')->toArray())->toBe(['A', 'B']);
+        ->and($results->pluck('ticker')->toArray())->toBe(['NVDA', 'MSFT']);
 });
 
-it('returns empty collection on HTTP failure', function () {
+it('returns empty collection when all quote requests fail', function () {
     Http::fake([
-        'api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers' => Http::response('', 500),
+        'finnhub.io/api/v1/quote*' => Http::response('', 500),
     ]);
+
+    config(['services.finnhub.watchlist' => ['AAPL']]);
 
     expect(app(MarketDataService::class)->getGainers())->toBeEmpty();
 });
 
-it('returns empty collection when response is invalid', function () {
-    Http::fake([
-        'api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers' => Http::response([
-            'status' => 'ERROR',
-        ], 200),
-    ]);
+it('returns empty collection when watchlist is empty', function () {
+    config(['services.finnhub.watchlist' => []]);
 
     expect(app(MarketDataService::class)->getGainers())->toBeEmpty();
 });
