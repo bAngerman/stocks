@@ -6,7 +6,8 @@
       "Bash(git commit -m ' *)",
       "Bash(git *)",
       "Bash(composer require *)",
-      "Bash(vendor/bin/pint *)"
+      "Bash(vendor/bin/pint *)",
+      "Bash(./vendor/bin/pest *)"
     ]
   },
   "enableAllProjectMcpServers": true,
