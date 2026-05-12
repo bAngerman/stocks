@@ -46,4 +46,8 @@ return [
         'channel_id' => env('DISCORD_CHANNEL_ID'),
     ],
 
+    'polygon' => [
+        'key' => env('POLYGON_API_KEY'),
+    ],
+
 ];
