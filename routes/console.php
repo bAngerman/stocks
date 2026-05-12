@@ -6,11 +6,19 @@ use App\Jobs\SyncGainersJob;
 use App\Models\Persona;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 // Artisan::command('inspire', function () {
 //     $this->comment(Inspiring::quote());
 // })->purpose('Display an inspiring quote');
+
+// Temporary heartbeat — confirms the scheduler is running on the remote environment.
+Schedule::call(function () {
+    Log::info('scheduler:heartbeat', ['time' => now()->toIso8601String()]);
+})
+    ->everyFiveMinutes()
+    ->name('scheduler:heartbeat');
 
 // Dispatch one evaluation job per active persona every 15 minutes during NYSE hours.
 Schedule::call(function () {
