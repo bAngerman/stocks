@@ -9,6 +9,7 @@ use App\Trading\TradeSignal;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AIEvaluationJob implements ShouldQueue
 {
@@ -26,6 +27,11 @@ class AIEvaluationJob implements ShouldQueue
 
     public function handle(AIEvaluator $evaluator): void
     {
+        Log::info('AIEvaluationJob: starting', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+        ]);
+
         $result = $evaluator->evaluate($this->persona, $this->signal, $this->snapshot);
 
         if (! $result) {
@@ -39,11 +45,26 @@ class AIEvaluationJob implements ShouldQueue
 
         [$resolvedSignal, $rationale] = $result;
 
+        Log::info('AIEvaluationJob: signal approved by AI, dispatching trade', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'action' => $resolvedSignal->action->value,
+        ]);
+
         ExecuteTradeJob::dispatch(
             $this->persona,
             $resolvedSignal,
             (float) $this->snapshot->price,
             $rationale,
         );
+    }
+
+    public function failed(Throwable $e): void
+    {
+        Log::error('AIEvaluationJob: failed', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'error' => $e->getMessage(),
+        ]);
     }
 }

@@ -14,6 +14,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class PostWeeklyReportJob implements ShouldQueue
 {
@@ -35,6 +37,8 @@ class PostWeeklyReportJob implements ShouldQueue
 
     public function handle(DiscordService $discord): void
     {
+        Log::info('PostWeeklyReportJob: starting');
+
         $periodEnd = now();
         $periodStart = $periodEnd->copy()->subWeek();
 
@@ -109,6 +113,17 @@ class PostWeeklyReportJob implements ShouldQueue
                 'posted_at' => $now,
             ]);
         });
+
+        Log::info('PostWeeklyReportJob: completed', [
+            'personas_count' => $personas->count(),
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+        ]);
+    }
+
+    public function failed(Throwable $e): void
+    {
+        Log::error('PostWeeklyReportJob: failed', ['error' => $e->getMessage()]);
     }
 
     private function computeTotalValue(Persona $persona, Collection $latestSnapshots): float

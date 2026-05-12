@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ExecuteTradeJob implements ShouldQueue
 {
@@ -26,11 +27,28 @@ class ExecuteTradeJob implements ShouldQueue
 
     public function handle(): void
     {
+        Log::info('ExecuteTradeJob: starting', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'action' => $this->signal->action->value,
+            'shares' => $this->signal->shares,
+        ]);
+
         if ($this->signal->action === TradeAction::Buy) {
             $this->executeBuy();
         } else {
             $this->executeSell();
         }
+    }
+
+    public function failed(Throwable $e): void
+    {
+        Log::error('ExecuteTradeJob: failed', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'action' => $this->signal->action->value,
+            'error' => $e->getMessage(),
+        ]);
     }
 
     private function executeBuy(): void
@@ -71,6 +89,14 @@ class ExecuteTradeJob implements ShouldQueue
 
             $this->recordTrade($this->signal->shares);
         });
+
+        Log::info('ExecuteTradeJob: buy executed', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'shares' => $this->signal->shares,
+            'price' => $this->pricePerShare,
+            'total' => $totalCost,
+        ]);
     }
 
     private function executeSell(): void
@@ -94,6 +120,14 @@ class ExecuteTradeJob implements ShouldQueue
 
             $this->recordTrade($sharesToSell);
         });
+
+        Log::info('ExecuteTradeJob: sell executed', [
+            'persona_id' => $this->persona->id,
+            'ticker' => $this->signal->ticker,
+            'shares' => $sharesToSell,
+            'price' => $this->pricePerShare,
+            'total' => round($sharesToSell * $this->pricePerShare, 2),
+        ]);
     }
 
     private function recordTrade(float $shares): void
