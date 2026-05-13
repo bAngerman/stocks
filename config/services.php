@@ -48,7 +48,6 @@ return [
 
     'finnhub' => [
         'key' => env('FINNHUB_API_KEY'),
-        'watchlist' => explode(',', env('FINNHUB_WATCHLIST', 'AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL,META,AMD,SPY,QQQ,JPM,BAC,XOM,DIS,NFLX,UBER,COIN,PLTR,SQ,SOFI')),
     ],
 
 ];
