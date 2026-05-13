@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Persona;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -37,6 +39,68 @@ class TickerDiscoveryService
         }
 
         return $parsed;
+    }
+
+    /**
+     * @param  array<int, array{ticker: string, name: string, rationale: string}>  $pool
+     * @param  Collection<int, Persona>  $personas
+     * @return array<string, string[]>
+     */
+    public function assignToPersonas(array $pool, Collection $personas): array
+    {
+        if (empty($pool) || $personas->isEmpty()) {
+            return [];
+        }
+
+        $response = Http::withHeaders([
+            'x-api-key' => config('services.anthropic.key'),
+            'anthropic-version' => config('services.anthropic.version'),
+            'content-type' => 'application/json',
+        ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
+            'model' => config('services.anthropic.model'),
+            'max_tokens' => 512,
+            'messages' => [['role' => 'user', 'content' => $this->buildAssignmentPrompt($pool, $personas)]],
+        ]);
+
+        $response->throw();
+
+        $text = $response->json('content.0.text', '');
+        $text = preg_replace('/^```(?:\w+)?\n?|\n?```$/s', '', trim($text));
+        $parsed = json_decode($text, true);
+
+        if (! is_array($parsed)) {
+            Log::warning('TickerDiscoveryService: unparseable assignment response', ['response' => $text]);
+
+            return [];
+        }
+
+        return $parsed;
+    }
+
+    private function buildAssignmentPrompt(array $pool, Collection $personas): string
+    {
+        $poolList = collect($pool)
+            ->map(fn (array $t) => "- {$t['ticker']}: {$t['rationale']}")
+            ->implode("\n");
+
+        $personaList = $personas
+            ->map(fn (Persona $p) => "- {$p->name} ({$p->strategy_type->value}): {$p->description}")
+            ->implode("\n");
+
+        return <<<PROMPT
+You are assigning stock tickers to trading personas for a paper trading system.
+
+Available tickers (only assign from this list):
+{$poolList}
+
+Personas:
+{$personaList}
+
+For each persona, select the tickers from the list above that best match their strategy. Only assign tickers that appear in the available list above.
+
+Return a JSON object only — no other text:
+{"Persona Name": ["TICKER1", "TICKER2"], ...}
+PROMPT;
     }
 
     private function buildDiscoveryPrompt(int $count): string
