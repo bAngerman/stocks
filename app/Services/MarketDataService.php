@@ -22,7 +22,7 @@ class MarketDataService
 
     public function getQuote(string $ticker): MarketQuote
     {
-        $response = Http::withToken($this->apiKey)
+        $response = Http::withHeaders(['X-Finnhub-Token' => $this->apiKey])
             ->get('https://finnhub.io/api/v1/quote', ['symbol' => $ticker])
             ->throw()
             ->json();
