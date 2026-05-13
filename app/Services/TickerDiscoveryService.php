@@ -77,6 +77,16 @@ class TickerDiscoveryService
         return $parsed;
     }
 
+    private function buildDiscoveryPrompt(int $count): string
+    {
+        return <<<PROMPT
+You are assisting an automated paper trading system. Suggest exactly {$count} US stock and ETF tickers worth watching for active intraday trading today. Focus on stocks with strong momentum, high volume, or notable volatility. Stocks and ETFs only — no options, no crypto.
+
+Return a JSON array only — no other text:
+[{"ticker": "SYMBOL", "name": "Company Name", "rationale": "Brief reason"}, ...]
+PROMPT;
+    }
+
     private function buildAssignmentPrompt(array $pool, Collection $personas): string
     {
         $poolList = collect($pool)
@@ -84,7 +94,7 @@ class TickerDiscoveryService
             ->implode("\n");
 
         $personaList = $personas
-            ->map(fn (Persona $p) => "- {$p->name} ({$p->strategy_type->value}): {$p->description}")
+            ->map(fn (Persona $p) => "- {$p->name} ({$p->strategy_type->value}): ".($p->description ?? $p->strategy_type->value))
             ->implode("\n");
 
         return <<<PROMPT
@@ -100,16 +110,6 @@ For each persona, select the tickers from the list above that best match their s
 
 Return a JSON object only — no other text:
 {"Persona Name": ["TICKER1", "TICKER2"], ...}
-PROMPT;
-    }
-
-    private function buildDiscoveryPrompt(int $count): string
-    {
-        return <<<PROMPT
-You are assisting an automated paper trading system. Suggest exactly {$count} US stock and ETF tickers worth watching for active intraday trading today. Focus on stocks with strong momentum, high volume, or notable volatility. Stocks and ETFs only — no options, no crypto.
-
-Return a JSON array only — no other text:
-[{"ticker": "SYMBOL", "name": "Company Name", "rationale": "Brief reason"}, ...]
 PROMPT;
     }
 }

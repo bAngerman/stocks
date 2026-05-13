@@ -81,6 +81,9 @@ it('returns persona-to-ticker assignment map from Claude', function () {
     expect($result)->toHaveKey('Momentum Mike')
         ->and($result['Momentum Mike'])->toBe(['NVDA'])
         ->and($result['Mean Reversion Sally'])->toBe(['SPY']);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.anthropic.com/v1/messages'
+        && $request->hasHeader('x-api-key'));
 });
 
 it('strips markdown fences from assignment response', function () {
