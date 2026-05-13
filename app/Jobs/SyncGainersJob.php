@@ -17,6 +17,8 @@ class SyncGainersJob implements ShouldQueue
 {
     use Queueable;
 
+    public int $tries = 1;
+
     public function handle(TickerDiscoveryService $discovery, MarketDataService $marketData): void
     {
         Log::info('SyncGainersJob: starting');

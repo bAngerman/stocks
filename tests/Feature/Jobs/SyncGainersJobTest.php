@@ -112,7 +112,7 @@ it('returns early when pool is empty without making assignments', function () {
     $persona = Persona::factory()->create(['name' => 'Test Persona']);
 
     $discovery = $this->mock(TickerDiscoveryService::class);
-    $discovery->shouldReceive('discoverPool')->andReturn([]);
+    $discovery->shouldReceive('discoverPool')->once()->andReturn([]);
     $discovery->shouldReceive('assignToPersonas')->never();
 
     $this->mock(MarketDataService::class)->shouldNotReceive('getQuote');
