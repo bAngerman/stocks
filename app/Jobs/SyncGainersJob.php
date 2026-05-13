@@ -5,7 +5,9 @@ namespace App\Jobs;
 use App\Enums\TickerSource;
 use App\Enums\TickerStatus;
 use App\Models\Persona;
+use App\Models\PersonaTicker;
 use App\Services\MarketDataService;
+use App\Services\TickerDiscoveryService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -15,36 +17,86 @@ class SyncGainersJob implements ShouldQueue
 {
     use Queueable;
 
-    public function handle(MarketDataService $marketData): void
+    public function handle(TickerDiscoveryService $discovery, MarketDataService $marketData): void
     {
         Log::info('SyncGainersJob: starting');
 
-        $gainers = $marketData->getGainers();
+        $ttl = (int) config('trading.candidate_ttl_days', 7);
+        $pruned = PersonaTicker::where('status', TickerStatus::Candidate)
+            ->where('created_at', '<', now()->subDays($ttl))
+            ->delete();
+        Log::info('SyncGainersJob: pruned stale candidates', ['count' => $pruned]);
 
-        if ($gainers->isEmpty()) {
-            Log::warning('SyncGainersJob: no gainers returned from market data');
+        $personas = Persona::where('is_active', true)->get();
+        if ($personas->isEmpty()) {
+            Log::warning('SyncGainersJob: no active personas');
 
             return;
         }
 
-        $personaCount = 0;
+        $pool = $discovery->discoverPool();
+        if (empty($pool)) {
+            Log::warning('SyncGainersJob: empty pool from discovery');
 
-        Persona::where('is_active', true)->each(function (Persona $persona) use ($gainers, &$personaCount) {
-            foreach ($gainers as $gainer) {
-                $persona->tickers()->firstOrCreate(
-                    ['ticker' => $gainer['ticker']],
+            return;
+        }
+
+        $assignments = $discovery->assignToPersonas($pool, $personas);
+        if (empty($assignments)) {
+            Log::warning('SyncGainersJob: empty assignments from discovery');
+
+            return;
+        }
+
+        $allTickers = collect($assignments)->flatten()->unique()->values()->all();
+        $validTickers = collect($allTickers)->filter(function (string $ticker) use ($marketData) {
+            try {
+                return $marketData->getQuote($ticker)->price > 0;
+            } catch (Throwable $e) {
+                Log::warning('SyncGainersJob: ticker validation failed', [
+                    'ticker' => $ticker,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return false;
+            }
+        })->all();
+
+        $rationales = collect($pool)->keyBy('ticker');
+        $personaMap = $personas->keyBy('name');
+        $tickersAdded = 0;
+
+        foreach ($assignments as $personaName => $tickers) {
+            $persona = $personaMap->get($personaName);
+            if (! $persona) {
+                continue;
+            }
+
+            foreach ($tickers as $ticker) {
+                if (! in_array($ticker, $validTickers)) {
+                    continue;
+                }
+
+                $row = $persona->tickers()->firstOrCreate(
+                    ['ticker' => $ticker],
                     [
                         'status' => TickerStatus::Candidate,
-                        'source' => TickerSource::GainersScan,
+                        'source' => TickerSource::AiDiscovered,
+                        'ai_rationale' => $rationales->get($ticker)['rationale'] ?? null,
                     ]
                 );
+
+                if ($row->wasRecentlyCreated) {
+                    $tickersAdded++;
+                }
             }
-            $personaCount++;
-        });
+        }
 
         Log::info('SyncGainersJob: completed', [
-            'gainers_count' => $gainers->count(),
-            'personas_synced' => $personaCount,
+            'pool_size' => count($pool),
+            'valid_tickers' => count($validTickers),
+            'tickers_added' => $tickersAdded,
+            'personas_processed' => count($assignments),
         ]);
     }
 
