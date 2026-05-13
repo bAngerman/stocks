@@ -32,6 +32,7 @@ class AIEvaluator
         $response->throw();
 
         $text = $response->json('content.0.text', '');
+        $text = preg_replace('/^```(?:\w+)?\n?|\n?```$/s', '', trim($text));
         $parsed = json_decode($text, true);
 
         if (! is_array($parsed) || ! isset($parsed['decision'])) {

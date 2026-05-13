@@ -47,6 +47,26 @@ it('returns a modified signal when AI suggests different share count', function 
         ->and($rationale)->toBe('Increase position size.');
 });
 
+it('parses response when AI wraps JSON in markdown code fences', function () {
+    $json = json_encode(['decision' => 'approve', 'rationale' => 'Looks good.']);
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'content' => [[
+                'text' => "```json\n{$json}\n```",
+            ]],
+        ]),
+    ]);
+
+    $persona = Persona::factory()->create();
+    $snapshot = PriceSnapshot::factory()->forTicker('AAPL')->create(['price' => 150.0, 'change_percent' => 1.8]);
+    $signal = new TradeSignal('AAPL', TradeAction::Buy, 1.0, 'Algo signal', 0.6, true);
+
+    [$resolvedSignal, $rationale] = app(AIEvaluator::class)->evaluate($persona, $signal, $snapshot);
+
+    expect($resolvedSignal->ticker)->toBe('AAPL')
+        ->and($rationale)->toBe('Looks good.');
+});
+
 it('returns null when AI rejects the signal', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
