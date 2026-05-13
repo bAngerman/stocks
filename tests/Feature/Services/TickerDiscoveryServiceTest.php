@@ -22,6 +22,10 @@ it('returns a pool of ticker candidates from Claude', function () {
         ->and($result[0]['ticker'])->toBe('NVDA')
         ->and($result[0]['rationale'])->toBe('AI momentum')
         ->and($result[1]['ticker'])->toBe('TSLA');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.anthropic.com/v1/messages' &&
+        $request->hasHeader('x-api-key')
+    );
 });
 
 it('strips markdown fences from pool response', function () {
