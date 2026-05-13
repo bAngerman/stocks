@@ -6,6 +6,7 @@ use App\Models\Persona;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class TickerDiscoveryService
 {
@@ -16,17 +17,23 @@ class TickerDiscoveryService
      */
     public function discoverPool(int $count = 25): array
     {
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.anthropic.key'),
-            'anthropic-version' => config('services.anthropic.version'),
-            'content-type' => 'application/json',
-        ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
-            'model' => config('services.anthropic.model'),
-            'max_tokens' => 1024,
-            'messages' => [['role' => 'user', 'content' => $this->buildDiscoveryPrompt($count)]],
-        ]);
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => config('services.anthropic.key'),
+                'anthropic-version' => config('services.anthropic.version'),
+                'content-type' => 'application/json',
+            ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
+                'model' => config('services.anthropic.model'),
+                'max_tokens' => 1024,
+                'messages' => [['role' => 'user', 'content' => $this->buildDiscoveryPrompt($count)]],
+            ]);
 
-        $response->throw();
+            $response->throw();
+        } catch (Throwable $e) {
+            Log::warning('TickerDiscoveryService: Claude API error in discoverPool', ['error' => $e->getMessage()]);
+
+            return [];
+        }
 
         $text = $response->json('content.0.text', '');
         $text = preg_replace('/^```(?:\w+)?\n?|\n?```$/s', '', trim($text));
@@ -52,17 +59,23 @@ class TickerDiscoveryService
             return [];
         }
 
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.anthropic.key'),
-            'anthropic-version' => config('services.anthropic.version'),
-            'content-type' => 'application/json',
-        ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
-            'model' => config('services.anthropic.model'),
-            'max_tokens' => 512,
-            'messages' => [['role' => 'user', 'content' => $this->buildAssignmentPrompt($pool, $personas)]],
-        ]);
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => config('services.anthropic.key'),
+                'anthropic-version' => config('services.anthropic.version'),
+                'content-type' => 'application/json',
+            ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
+                'model' => config('services.anthropic.model'),
+                'max_tokens' => 512,
+                'messages' => [['role' => 'user', 'content' => $this->buildAssignmentPrompt($pool, $personas)]],
+            ]);
 
-        $response->throw();
+            $response->throw();
+        } catch (Throwable $e) {
+            Log::warning('TickerDiscoveryService: Claude API error in assignToPersonas', ['error' => $e->getMessage()]);
+
+            return [];
+        }
 
         $text = $response->json('content.0.text', '');
         $text = preg_replace('/^```(?:\w+)?\n?|\n?```$/s', '', trim($text));
