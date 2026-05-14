@@ -23,6 +23,7 @@ class TradeFactory extends Factory
             'action' => $this->faker->randomElement(TradeAction::cases()),
             'shares' => $shares,
             'price_per_share' => $price,
+            'cost_basis' => null,
             'total_value' => round($shares * $price, 2),
             'signal_reason' => $this->faker->sentence(),
             'ai_rationale' => null,

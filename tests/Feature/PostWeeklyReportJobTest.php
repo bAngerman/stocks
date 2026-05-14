@@ -227,21 +227,48 @@ it('uses average_cost as fallback for total value when position has no price sna
     expect((float) $snapshot->total_value)->toBe(6500.0);
 });
 
-it('shows weekly trade count in persona embed', function () {
+it('shows one line per trade in the weekly trades field', function () {
     $persona = Persona::factory()->create(['cash_balance' => 10000, 'is_active' => true]);
-    Trade::factory()->for($persona)->buy()->create(['executed_at' => now()->subDays(3)]);
-    Trade::factory()->for($persona)->buy()->create(['executed_at' => now()->subDays(2)]);
-    Trade::factory()->for($persona)->sell()->create(['executed_at' => now()->subDays(1)]);
+    Trade::factory()->for($persona)->buy()->create(['ticker' => 'NVDA', 'executed_at' => now()->subDays(3)]);
+    Trade::factory()->for($persona)->buy()->create(['ticker' => 'AAPL', 'executed_at' => now()->subDays(2)]);
+    Trade::factory()->for($persona)->sell()->create(['ticker' => 'MSFT', 'executed_at' => now()->subDays(1)]);
 
     PostWeeklyReportJob::dispatchSync();
 
     Http::assertSent(function ($request) {
         $fields = $request->data()['embeds'][1]['fields'];
         $tradesField = collect($fields)->firstWhere('name', 'Weekly Trades');
+        $value = $tradesField['value'];
 
-        return str_contains($tradesField['value'], '3  (')
-            && str_contains($tradesField['value'], '2 buys')
-            && str_contains($tradesField['value'], '1 sells');
+        return str_contains($value, 'NVDA')
+            && str_contains($value, 'AAPL')
+            && str_contains($value, 'MSFT')
+            && substr_count($value, '🟢 BUY') === 2
+            && str_contains($value, '🔴 SELL');
+    });
+});
+
+it('shows realized P/L on sell trades that have a cost basis', function () {
+    $persona = Persona::factory()->create(['cash_balance' => 10000, 'is_active' => true]);
+    Trade::factory()->for($persona)->sell()->create([
+        'ticker' => 'TSLA',
+        'shares' => 10,
+        'price_per_share' => 250.00,
+        'cost_basis' => 200.00,
+        'total_value' => 2500.00,
+        'executed_at' => now()->subDays(1),
+    ]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    Http::assertSent(function ($request) {
+        $fields = $request->data()['embeds'][1]['fields'];
+        $tradesField = collect($fields)->firstWhere('name', 'Weekly Trades');
+        $value = $tradesField['value'];
+
+        // P/L = (250 - 200) * 10 = +500.00
+        return str_contains($value, 'TSLA')
+            && str_contains($value, '+500.00');
     });
 });
 

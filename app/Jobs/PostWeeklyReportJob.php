@@ -249,9 +249,24 @@ class PostWeeklyReportJob implements ShouldQueue
 
         $tradesValue = $persona->trades->isEmpty()
             ? 'No trades this week'
-            : $persona->trades->count().'  ('
-                .$persona->trades->filter(fn ($t) => $t->action === TradeAction::Buy)->count().' buys · '
-                .$persona->trades->filter(fn ($t) => $t->action === TradeAction::Sell)->count().' sells)';
+            : $persona->trades->map(function ($trade) {
+                $isBuy = $trade->action === TradeAction::Buy;
+                $emoji = $isBuy ? '🟢' : '🔴';
+                $label = $isBuy ? 'BUY ' : 'SELL';
+                $shares = rtrim(rtrim(number_format((float) $trade->shares, 4), '0'), '.');
+                $price = number_format((float) $trade->price_per_share, 2);
+                $total = number_format((float) $trade->total_value, 2);
+                $line = "{$emoji} {$label}  {$trade->ticker}  {$shares} × \${$price} = \${$total}";
+
+                if (! $isBuy && $trade->cost_basis !== null) {
+                    $pnl = ((float) $trade->price_per_share - (float) $trade->cost_basis) * (float) $trade->shares;
+                    $pnlSign = $pnl >= 0 ? '+' : '';
+                    $pnlDot = $pnl >= 0 ? '🟢' : '🔴';
+                    $line .= "  ({$pnlSign}".number_format($pnl, 2).") {$pnlDot}";
+                }
+
+                return $line;
+            })->join("\n");
 
         return [
             'title' => "{$medal} {$persona->name}",

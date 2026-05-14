@@ -80,7 +80,7 @@ class ExecuteTradeJob implements ShouldQueue
             $this->persona->cash_balance = (float) $this->persona->cash_balance - $totalCost;
             $this->persona->save();
 
-            $this->recordTrade($this->signal->shares);
+            $this->recordTrade($this->signal->shares, null);
         });
 
         Log::info('ExecuteTradeJob: buy executed', [
@@ -104,15 +104,16 @@ class ExecuteTradeJob implements ShouldQueue
         }
 
         $sharesToSell = min($this->signal->shares, (float) $position->shares);
+        $costBasis = (float) $position->average_cost;
 
-        DB::transaction(function () use ($position, $sharesToSell) {
+        DB::transaction(function () use ($position, $sharesToSell, $costBasis) {
             $position->shares = (float) $position->shares - $sharesToSell;
             $position->save();
 
             $this->persona->cash_balance = (float) $this->persona->cash_balance + ($sharesToSell * $this->pricePerShare);
             $this->persona->save();
 
-            $this->recordTrade($sharesToSell);
+            $this->recordTrade($sharesToSell, $costBasis);
         });
 
         Log::info('ExecuteTradeJob: sell executed', [
@@ -125,7 +126,7 @@ class ExecuteTradeJob implements ShouldQueue
         ]);
     }
 
-    private function recordTrade(float $shares): void
+    private function recordTrade(float $shares, ?float $costBasis): void
     {
         Trade::create([
             'persona_id' => $this->persona->id,
@@ -133,6 +134,7 @@ class ExecuteTradeJob implements ShouldQueue
             'action' => $this->signal->action,
             'shares' => $shares,
             'price_per_share' => $this->pricePerShare,
+            'cost_basis' => $costBasis,
             'total_value' => round($shares * $this->pricePerShare, 2),
             'signal_reason' => $this->signal->reason,
             'ai_rationale' => $this->aiRationale,
