@@ -13,7 +13,6 @@ function makePool(array $tickers): array
 {
     return collect($tickers)->map(fn ($t) => [
         'ticker' => $t,
-        'name' => $t,
         'rationale' => "Reason for {$t}",
     ])->values()->all();
 }

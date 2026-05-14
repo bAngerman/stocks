@@ -7,8 +7,8 @@ use Illuminate\Support\Facades\Log;
 
 it('returns a pool of ticker candidates from Claude', function () {
     $pool = [
-        ['ticker' => 'NVDA', 'name' => 'NVIDIA Corp', 'rationale' => 'AI momentum'],
-        ['ticker' => 'TSLA', 'name' => 'Tesla Inc', 'rationale' => 'High volatility'],
+        ['ticker' => 'NVDA', 'rationale' => 'AI momentum'],
+        ['ticker' => 'TSLA', 'rationale' => 'High volatility'],
     ];
 
     Http::fake([
@@ -30,7 +30,7 @@ it('returns a pool of ticker candidates from Claude', function () {
 });
 
 it('strips markdown fences from pool response', function () {
-    $pool = [['ticker' => 'AAPL', 'name' => 'Apple Inc', 'rationale' => 'Stable']];
+    $pool = [['ticker' => 'AAPL', 'rationale' => 'Stable']];
 
     Http::fake([
         'api.anthropic.com/*' => Http::response([
@@ -59,8 +59,8 @@ it('returns empty array and logs warning when pool response is unparseable', fun
 
 it('returns persona-to-ticker assignment map from Claude', function () {
     $pool = [
-        ['ticker' => 'NVDA', 'name' => 'NVIDIA', 'rationale' => 'AI momentum'],
-        ['ticker' => 'SPY', 'name' => 'S&P 500 ETF', 'rationale' => 'Mean reversion target'],
+        ['ticker' => 'NVDA', 'rationale' => 'AI momentum'],
+        ['ticker' => 'SPY', 'rationale' => 'Mean reversion target'],
     ];
     $personas = Persona::factory()->count(2)->sequence(
         ['name' => 'Momentum Mike'],
@@ -87,7 +87,7 @@ it('returns persona-to-ticker assignment map from Claude', function () {
 });
 
 it('strips markdown fences from assignment response', function () {
-    $pool = [['ticker' => 'AAPL', 'name' => 'Apple', 'rationale' => 'Stable']];
+    $pool = [['ticker' => 'AAPL', 'rationale' => 'Stable']];
     $personas = Persona::factory()->create(['name' => 'Test Persona']);
     $json = json_encode(['Test Persona' => ['AAPL']]);
 
@@ -103,7 +103,7 @@ it('strips markdown fences from assignment response', function () {
 });
 
 it('returns empty array and logs warning when assignment response is unparseable', function () {
-    $pool = [['ticker' => 'AAPL', 'name' => 'Apple', 'rationale' => 'Stable']];
+    $pool = [['ticker' => 'AAPL', 'rationale' => 'Stable']];
     $personas = Persona::factory()->count(1)->create();
 
     Http::fake([
@@ -131,7 +131,7 @@ it('returns empty array without calling Claude when pool is empty', function () 
 
 it('returns empty array without calling Claude when personas collection is empty', function () {
     Http::fake();
-    $pool = [['ticker' => 'AAPL', 'name' => 'Apple', 'rationale' => 'Stable']];
+    $pool = [['ticker' => 'AAPL', 'rationale' => 'Stable']];
 
     $result = app(TickerDiscoveryService::class)->assignToPersonas($pool, collect());
 

@@ -13,7 +13,7 @@ class TickerDiscoveryService
     /**
      * Ask Claude for a pool of tradeable ticker candidates.
      *
-     * @return array<int, array{ticker: string, name: string, rationale: string}>
+     * @return array<int, array{ticker: string, rationale: string}>
      */
     public function discoverPool(int $count = 25): array
     {
@@ -24,7 +24,7 @@ class TickerDiscoveryService
                 'content-type' => 'application/json',
             ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
                 'model' => config('services.anthropic.model'),
-                'max_tokens' => 4096,
+                'max_tokens' => 1024,
                 'messages' => [['role' => 'user', 'content' => $this->buildDiscoveryPrompt($count)]],
             ]);
 
@@ -49,7 +49,7 @@ class TickerDiscoveryService
     }
 
     /**
-     * @param  array<int, array{ticker: string, name: string, rationale: string}>  $pool
+     * @param  array<int, array{ticker: string, rationale: string}>  $pool
      * @param  Collection<int, Persona>  $personas
      * @return array<string, string[]>
      */
@@ -95,8 +95,8 @@ class TickerDiscoveryService
         return <<<PROMPT
 You are assisting an automated paper trading system. Suggest exactly {$count} US stock and ETF tickers worth watching for active intraday trading today. Focus on stocks with strong momentum, high volume, or notable volatility. Stocks and ETFs only — no options, no crypto.
 
-Return a JSON array only — no other text:
-[{"ticker": "SYMBOL", "name": "Company Name", "rationale": "Brief reason"}, ...]
+Return a JSON array only — no other text. Keep each rationale under 10 words:
+[{"ticker": "SYMBOL", "rationale": "Brief reason under 10 words"}, ...]
 PROMPT;
     }
 
