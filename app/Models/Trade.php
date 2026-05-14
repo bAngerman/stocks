@@ -17,6 +17,7 @@ class Trade extends Model
         'action',
         'shares',
         'price_per_share',
+        'cost_basis',
         'total_value',
         'signal_reason',
         'ai_rationale',
@@ -27,6 +28,7 @@ class Trade extends Model
         'action' => TradeAction::class,
         'shares' => 'decimal:4',
         'price_per_share' => 'decimal:4',
+        'cost_basis' => 'decimal:4',
         'total_value' => 'decimal:2',
         'executed_at' => 'datetime',
     ];
