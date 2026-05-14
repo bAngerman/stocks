@@ -24,7 +24,7 @@ class TickerDiscoveryService
                 'content-type' => 'application/json',
             ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
                 'model' => config('services.anthropic.model'),
-                'max_tokens' => 1024,
+                'max_tokens' => 4096,
                 'messages' => [['role' => 'user', 'content' => $this->buildDiscoveryPrompt($count)]],
             ]);
 
