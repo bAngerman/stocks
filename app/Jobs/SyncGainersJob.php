@@ -21,32 +21,23 @@ class SyncGainersJob implements ShouldQueue
 
     public function handle(TickerDiscoveryService $discovery, MarketDataService $marketData): void
     {
-        Log::info('SyncGainersJob: starting');
-
         $ttl = (int) config('trading.candidate_ttl_days', 7);
-        $pruned = PersonaTicker::where('status', TickerStatus::Candidate)
+        PersonaTicker::where('status', TickerStatus::Candidate)
             ->where('created_at', '<', now()->subDays($ttl))
             ->delete();
-        Log::info('SyncGainersJob: pruned stale candidates', ['count' => $pruned]);
 
         $personas = Persona::where('is_active', true)->get();
         if ($personas->isEmpty()) {
-            Log::warning('SyncGainersJob: no active personas');
-
             return;
         }
 
         $pool = $discovery->discoverPool();
         if (empty($pool)) {
-            Log::warning('SyncGainersJob: empty pool from discovery');
-
             return;
         }
 
         $assignments = $discovery->assignToPersonas($pool, $personas);
         if (empty($assignments)) {
-            Log::warning('SyncGainersJob: empty assignments from discovery');
-
             return;
         }
 
@@ -66,7 +57,6 @@ class SyncGainersJob implements ShouldQueue
 
         $rationales = collect($pool)->keyBy('ticker');
         $personaMap = $personas->keyBy('name');
-        $tickersAdded = 0;
 
         foreach ($assignments as $personaName => $tickers) {
             $persona = $personaMap->get($personaName);
@@ -79,7 +69,7 @@ class SyncGainersJob implements ShouldQueue
                     continue;
                 }
 
-                $row = $persona->tickers()->firstOrCreate(
+                $persona->tickers()->firstOrCreate(
                     ['ticker' => $ticker],
                     [
                         'status' => TickerStatus::Candidate,
@@ -87,19 +77,8 @@ class SyncGainersJob implements ShouldQueue
                         'ai_rationale' => $rationales->get($ticker)['rationale'] ?? null,
                     ]
                 );
-
-                if ($row->wasRecentlyCreated) {
-                    $tickersAdded++;
-                }
             }
         }
-
-        Log::info('SyncGainersJob: completed', [
-            'pool_size' => count($pool),
-            'valid_tickers' => count($validTickers),
-            'tickers_added' => $tickersAdded,
-            'personas_processed' => count($assignments),
-        ]);
     }
 
     public function failed(Throwable $e): void

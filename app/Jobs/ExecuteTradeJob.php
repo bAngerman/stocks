@@ -27,13 +27,6 @@ class ExecuteTradeJob implements ShouldQueue
 
     public function handle(): void
     {
-        Log::info('ExecuteTradeJob: starting', [
-            'persona_id' => $this->persona->id,
-            'ticker' => $this->signal->ticker,
-            'action' => $this->signal->action->value,
-            'shares' => $this->signal->shares,
-        ]);
-
         if ($this->signal->action === TradeAction::Buy) {
             $this->executeBuy();
         } else {
@@ -92,6 +85,7 @@ class ExecuteTradeJob implements ShouldQueue
 
         Log::info('ExecuteTradeJob: buy executed', [
             'persona_id' => $this->persona->id,
+            'persona' => $this->persona->name,
             'ticker' => $this->signal->ticker,
             'shares' => $this->signal->shares,
             'price' => $this->pricePerShare,
@@ -123,6 +117,7 @@ class ExecuteTradeJob implements ShouldQueue
 
         Log::info('ExecuteTradeJob: sell executed', [
             'persona_id' => $this->persona->id,
+            'persona' => $this->persona->name,
             'ticker' => $this->signal->ticker,
             'shares' => $sharesToSell,
             'price' => $this->pricePerShare,

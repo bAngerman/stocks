@@ -27,29 +27,13 @@ class AIEvaluationJob implements ShouldQueue
 
     public function handle(AIEvaluator $evaluator): void
     {
-        Log::info('AIEvaluationJob: starting', [
-            'persona_id' => $this->persona->id,
-            'ticker' => $this->signal->ticker,
-        ]);
-
         $result = $evaluator->evaluate($this->persona, $this->signal, $this->snapshot);
 
         if (! $result) {
-            Log::info('AIEvaluationJob: signal rejected by AI', [
-                'persona_id' => $this->persona->id,
-                'ticker' => $this->signal->ticker,
-            ]);
-
             return;
         }
 
         [$resolvedSignal, $rationale] = $result;
-
-        Log::info('AIEvaluationJob: signal approved by AI, dispatching trade', [
-            'persona_id' => $this->persona->id,
-            'ticker' => $this->signal->ticker,
-            'action' => $resolvedSignal->action->value,
-        ]);
 
         ExecuteTradeJob::dispatch(
             $this->persona,

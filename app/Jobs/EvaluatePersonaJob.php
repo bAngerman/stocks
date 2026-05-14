@@ -23,11 +23,7 @@ class EvaluatePersonaJob implements ShouldQueue
 
     public function handle(MarketDataService $marketDataService): void
     {
-        Log::info('EvaluatePersonaJob: starting', ['persona_id' => $this->persona->id]);
-
         if (! $this->isDuringMarketHours()) {
-            Log::info('EvaluatePersonaJob: outside market hours, skipping', ['persona_id' => $this->persona->id]);
-
             return;
         }
 
@@ -38,8 +34,6 @@ class EvaluatePersonaJob implements ShouldQueue
             ->all();
 
         if (empty($tickers)) {
-            Log::info('EvaluatePersonaJob: no tickers, skipping', ['persona_id' => $this->persona->id]);
-
             return;
         }
 
@@ -58,7 +52,6 @@ class EvaluatePersonaJob implements ShouldQueue
         $signal = $strategy->evaluate($this->persona, $snapshots);
 
         if (! $signal) {
-            Log::info('EvaluatePersonaJob: no signal generated', ['persona_id' => $this->persona->id]);
             $this->ageCandidates(null);
 
             return;
@@ -79,17 +72,8 @@ class EvaluatePersonaJob implements ShouldQueue
         }
 
         if ($signal->shouldConsultAI) {
-            Log::info('EvaluatePersonaJob: dispatching AI evaluation', [
-                'persona_id' => $this->persona->id,
-                'ticker' => $signal->ticker,
-            ]);
             AIEvaluationJob::dispatch($this->persona, $signal, $snapshot);
         } else {
-            Log::info('EvaluatePersonaJob: dispatching trade execution', [
-                'persona_id' => $this->persona->id,
-                'ticker' => $signal->ticker,
-                'action' => $signal->action->value,
-            ]);
             ExecuteTradeJob::dispatch($this->persona, $signal, (float) $snapshot->price);
         }
     }
