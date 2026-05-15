@@ -23,7 +23,7 @@ Schedule::call(function () {
 // Post weekly summary every Friday at noon MT.
 Schedule::job(new PostWeeklyReportJob)
     ->timezone('America/Edmonton')
-    ->weeklyOn(5, '12:00')
+    ->weeklyOn(5, '9:00')
     ->name('trading:weekly-report');
 
 // Sync top daily equity gainers as candidate tickers — weekdays at 9:00am ET before market open.
