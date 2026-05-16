@@ -44,6 +44,7 @@ return [
     'discord' => [
         'token' => env('DISCORD_BOT_TOKEN'),
         'channel_id' => env('DISCORD_CHANNEL_ID'),
+        'bot_user_id' => env('DISCORD_BOT_USER_ID'),
     ],
 
     'finnhub' => [

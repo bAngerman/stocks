@@ -2,10 +2,12 @@
 
 use App\Enums\TradeAction;
 use App\Jobs\ExecuteTradeJob;
+use App\Jobs\PostTradeLotteryJob;
 use App\Models\Persona;
 use App\Models\Position;
 use App\Models\Trade;
 use App\Trading\TradeSignal;
+use Illuminate\Support\Facades\Queue;
 
 it('creates a trade record on a buy', function () {
     $persona = Persona::factory()->create(['cash_balance' => 10000.00]);
@@ -116,4 +118,40 @@ it('sells only available shares when signal requests more than held', function (
     $trade = Trade::first();
     expect((float) $trade->shares)->toBe(3.0)
         ->and($persona->fresh()->cash_balance)->toBe('5450.00');
+});
+
+it('dispatches PostTradeLotteryJob after a successful trade when lottery wins', function () {
+    Queue::fake([PostTradeLotteryJob::class]);
+    config(['trading.trade_lottery_probability' => 100]);
+
+    $persona = Persona::factory()->create(['cash_balance' => 10000.00]);
+    $signal = new TradeSignal('AAPL', TradeAction::Buy, 1.0, 'Signal', 0.9, false);
+
+    ExecuteTradeJob::dispatchSync($persona, $signal, 100.00);
+
+    Queue::assertPushed(PostTradeLotteryJob::class);
+});
+
+it('does not dispatch PostTradeLotteryJob when lottery probability is zero', function () {
+    Queue::fake([PostTradeLotteryJob::class]);
+    config(['trading.trade_lottery_probability' => 0]);
+
+    $persona = Persona::factory()->create(['cash_balance' => 10000.00]);
+    $signal = new TradeSignal('AAPL', TradeAction::Buy, 1.0, 'Signal', 0.9, false);
+
+    ExecuteTradeJob::dispatchSync($persona, $signal, 100.00);
+
+    Queue::assertNotPushed(PostTradeLotteryJob::class);
+});
+
+it('does not dispatch PostTradeLotteryJob when a buy is skipped due to insufficient cash', function () {
+    Queue::fake([PostTradeLotteryJob::class]);
+    config(['trading.trade_lottery_probability' => 100]);
+
+    $persona = Persona::factory()->create(['cash_balance' => 1.00]);
+    $signal = new TradeSignal('AAPL', TradeAction::Buy, 10.0, 'Signal', 0.9, false);
+
+    ExecuteTradeJob::dispatchSync($persona, $signal, 500.00);
+
+    Queue::assertNotPushed(PostTradeLotteryJob::class);
 });

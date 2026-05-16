@@ -59,7 +59,9 @@ class ExecuteTradeJob implements ShouldQueue
             return;
         }
 
-        DB::transaction(function () use ($totalCost) {
+        $trade = null;
+
+        DB::transaction(function () use ($totalCost, &$trade) {
             $position = $this->persona->positions()
                 ->firstOrNew(['ticker' => $this->signal->ticker]);
 
@@ -80,8 +82,10 @@ class ExecuteTradeJob implements ShouldQueue
             $this->persona->cash_balance = (float) $this->persona->cash_balance - $totalCost;
             $this->persona->save();
 
-            $this->recordTrade($this->signal->shares, null);
+            $trade = $this->recordTrade($this->signal->shares, null);
         });
+
+        $this->rollLottery($trade);
 
         Log::info('ExecuteTradeJob: buy executed', [
             'persona_id' => $this->persona->id,
@@ -105,16 +109,19 @@ class ExecuteTradeJob implements ShouldQueue
 
         $sharesToSell = min($this->signal->shares, (float) $position->shares);
         $costBasis = (float) $position->average_cost;
+        $trade = null;
 
-        DB::transaction(function () use ($position, $sharesToSell, $costBasis) {
+        DB::transaction(function () use ($position, $sharesToSell, $costBasis, &$trade) {
             $position->shares = (float) $position->shares - $sharesToSell;
             $position->save();
 
             $this->persona->cash_balance = (float) $this->persona->cash_balance + ($sharesToSell * $this->pricePerShare);
             $this->persona->save();
 
-            $this->recordTrade($sharesToSell, $costBasis);
+            $trade = $this->recordTrade($sharesToSell, $costBasis);
         });
+
+        $this->rollLottery($trade);
 
         Log::info('ExecuteTradeJob: sell executed', [
             'persona_id' => $this->persona->id,
@@ -126,9 +133,9 @@ class ExecuteTradeJob implements ShouldQueue
         ]);
     }
 
-    private function recordTrade(float $shares, ?float $costBasis): void
+    private function recordTrade(float $shares, ?float $costBasis): Trade
     {
-        Trade::create([
+        return Trade::create([
             'persona_id' => $this->persona->id,
             'ticker' => $this->signal->ticker,
             'action' => $this->signal->action,
@@ -140,5 +147,18 @@ class ExecuteTradeJob implements ShouldQueue
             'ai_rationale' => $this->aiRationale,
             'executed_at' => now(),
         ]);
+    }
+
+    private function rollLottery(?Trade $trade): void
+    {
+        if ($trade === null) {
+            return;
+        }
+
+        $probability = (int) config('trading.trade_lottery_probability', 20);
+
+        if ($probability > 0 && random_int(1, 100) <= $probability) {
+            PostTradeLotteryJob::dispatch($trade, $this->persona);
+        }
     }
 }

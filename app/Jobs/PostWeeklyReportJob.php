@@ -5,9 +5,11 @@ namespace App\Jobs;
 use App\Enums\StrategyType;
 use App\Enums\TradeAction;
 use App\Models\DiscordReport;
+use App\Models\GamificationPost;
 use App\Models\Persona;
 use App\Models\PersonaPortfolioSnapshot;
 use App\Models\PriceSnapshot;
+use App\Models\UserPoint;
 use App\Services\DiscordService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,6 +35,8 @@ class PostWeeklyReportJob implements ShouldQueue
 
     private const COLOR_GOLD = 16766720;
 
+    private const COLOR_PURPLE = 10181046;
+
     private const RANK_MEDALS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣'];
 
     public function handle(DiscordService $discord): void
@@ -42,6 +46,11 @@ class PostWeeklyReportJob implements ShouldQueue
         $periodEnd = now();
         $periodStart = $periodEnd->copy()->subWeek();
 
+        $unresolvedPosts = GamificationPost::whereNull('resolved_at')
+            ->whereBetween('created_at', [$periodStart, $periodEnd])
+            ->with('trade')
+            ->get();
+
         $personas = Persona::where('is_active', true)
             ->with([
                 'openPositions',
@@ -49,7 +58,9 @@ class PostWeeklyReportJob implements ShouldQueue
             ])
             ->get();
 
-        $tickers = $personas->flatMap(fn ($p) => $p->openPositions->pluck('ticker'))->unique()->values();
+        $positionTickers = $personas->flatMap(fn ($p) => $p->openPositions->pluck('ticker'));
+        $gamificationTickers = $unresolvedPosts->pluck('trade.ticker')->filter();
+        $tickers = $positionTickers->merge($gamificationTickers)->unique()->values();
 
         $latestSnapshots = $tickers->isEmpty()
             ? collect()
@@ -59,6 +70,8 @@ class PostWeeklyReportJob implements ShouldQueue
                 ->get()
                 ->unique('ticker')
                 ->keyBy('ticker');
+
+        $this->resolveTradeReactions($unresolvedPosts, $latestSnapshots, $discord);
 
         $totalValues = $personas->mapWithKeys(fn (Persona $persona) => [
             $persona->id => $this->computeTotalValue($persona, $latestSnapshots),
@@ -89,6 +102,8 @@ class PostWeeklyReportJob implements ShouldQueue
                 $latestSnapshots,
             );
         }
+
+        $embeds[] = $this->buildLeaderboardEmbed();
 
         $discord->postMessage($embeds);
 
@@ -124,6 +139,66 @@ class PostWeeklyReportJob implements ShouldQueue
     public function failed(Throwable $e): void
     {
         Log::error('PostWeeklyReportJob: failed', ['error' => $e->getMessage()]);
+    }
+
+    private function resolveTradeReactions(
+        Collection $unresolvedPosts,
+        Collection $latestSnapshots,
+        DiscordService $discord,
+    ): void {
+        foreach ($unresolvedPosts as $post) {
+            $trade = $post->trade;
+            $snapshot = $latestSnapshots->get($trade->ticker);
+
+            if ($snapshot === null) {
+                $post->update(['resolved_at' => now()]);
+
+                continue;
+            }
+
+            $currentPrice = (float) $snapshot->price;
+            $tradePrice = (float) $trade->price_per_share;
+            $isBuy = $trade->action === TradeAction::Buy;
+
+            $priceWentUp = $currentPrice > $tradePrice;
+            $correctEmoji = ($isBuy ? $priceWentUp : ! $priceWentUp) ? '👍' : '👎';
+            $wrongEmoji = $correctEmoji === '👍' ? '👎' : '👍';
+
+            $correctReactors = collect($discord->getReactions($post->discord_message_id, $correctEmoji));
+            $wrongReactors = collect($discord->getReactions($post->discord_message_id, $wrongEmoji));
+
+            $doubleVoterIds = $correctReactors->pluck('id')
+                ->intersect($wrongReactors->pluck('id'));
+
+            foreach ($correctReactors as $user) {
+                if ($doubleVoterIds->contains($user['id'])) {
+                    continue;
+                }
+
+                UserPoint::updateOrCreate(
+                    ['discord_user_id' => $user['id']],
+                    ['discord_username' => $user['username']],
+                )->increment('total_points');
+            }
+
+            $post->update(['resolved_at' => now()]);
+        }
+    }
+
+    private function buildLeaderboardEmbed(): array
+    {
+        $topUsers = UserPoint::orderByDesc('total_points')->limit(10)->get();
+
+        $description = $topUsers->isEmpty()
+            ? 'No predictions scored yet — react to trades during the week!'
+            : $topUsers->map(fn (UserPoint $u, int $i) => ($i + 1).'. @'.$u->discord_username.' — '.$u->total_points.' pts')
+                ->join("\n");
+
+        return [
+            'title' => '🎮 Hot Take Leaderboard',
+            'description' => $description,
+            'color' => self::COLOR_PURPLE,
+        ];
     }
 
     private function computeTotalValue(Persona $persona, Collection $latestSnapshots): float

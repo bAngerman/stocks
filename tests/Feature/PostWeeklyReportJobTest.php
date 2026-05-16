@@ -2,26 +2,32 @@
 
 use App\Jobs\PostWeeklyReportJob;
 use App\Models\DiscordReport;
+use App\Models\GamificationPost;
 use App\Models\Persona;
 use App\Models\PersonaPortfolioSnapshot;
 use App\Models\Position;
 use App\Models\PriceSnapshot;
 use App\Models\Trade;
+use App\Models\UserPoint;
+use App\Services\DiscordService;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
-    Http::fake(['discord.com/*' => Http::response([], 200)]);
-    config(['services.discord.token' => 'token', 'services.discord.channel_id' => '123']);
+    Http::fake([
+        'discord.com/api/v10/channels/*/messages/*/reactions/*' => Http::response([], 200),
+        'discord.com/*' => Http::response(['id' => '0'], 200),
+    ]);
+    config(['services.discord.token' => 'token', 'services.discord.channel_id' => '123', 'services.discord.bot_user_id' => 'bot-id']);
 });
 
-it('posts one header embed plus one embed per active persona', function () {
+it('posts one header embed plus one embed per active persona plus a leaderboard embed', function () {
     Persona::factory()->count(8)->create(['is_active' => true]);
 
     PostWeeklyReportJob::dispatchSync();
 
     Http::assertSent(function ($request) {
-        return count($request->data()['embeds']) === 9;
+        return count($request->data()['embeds']) === 10;
     });
 });
 
@@ -35,7 +41,8 @@ it('excludes inactive personas from the report', function () {
         $embeds = $request->data()['embeds'];
         $allTitles = collect($embeds)->pluck('title')->join(' ');
 
-        return count($embeds) === 2
+        // 1 header + 1 active persona + 1 leaderboard
+        return count($embeds) === 3
             && ! str_contains($allTitles, 'Inactive Bot');
     });
 });
@@ -343,4 +350,134 @@ it('does not log a DiscordReport if the Discord API call fails', function () {
 
     expect(fn () => PostWeeklyReportJob::dispatchSync())->toThrow(Exception::class);
     expect(DiscordReport::count())->toBe(0);
+});
+
+// --- Gamification scoring tests ---
+
+function mockDiscord(array $reactions = []): DiscordService
+{
+    $discord = Mockery::mock(DiscordService::class);
+    $discord->shouldReceive('postMessage')->once();
+    $discord->shouldReceive('getReactions')->andReturnUsing(function (string $messageId, string $emoji) use ($reactions) {
+        return $reactions[$messageId][$emoji] ?? [];
+    });
+    app()->instance(DiscordService::class, $discord);
+
+    return $discord;
+}
+
+it('appends a leaderboard embed as the last embed in the report', function () {
+    $discord = Mockery::mock(DiscordService::class);
+    $discord->shouldReceive('postMessage')->once()->andReturnUsing(function (array $embeds) {
+        $last = end($embeds);
+        expect(str_contains($last['title'], 'Hot Take Leaderboard'))->toBeTrue();
+    });
+    app()->instance(DiscordService::class, $discord);
+
+    Persona::factory()->create(['is_active' => true]);
+    PostWeeklyReportJob::dispatchSync();
+});
+
+it('shows placeholder text in leaderboard when no points exist', function () {
+    $discord = Mockery::mock(DiscordService::class);
+    $discord->shouldReceive('postMessage')->once()->andReturnUsing(function (array $embeds) {
+        $last = end($embeds);
+        expect(str_contains($last['description'], 'No predictions scored yet'))->toBeTrue();
+    });
+    app()->instance(DiscordService::class, $discord);
+
+    Persona::factory()->create(['is_active' => true]);
+    PostWeeklyReportJob::dispatchSync();
+});
+
+it('shows top users in leaderboard when points exist', function () {
+    UserPoint::factory()->create(['discord_username' => 'alice', 'total_points' => 10]);
+    UserPoint::factory()->create(['discord_username' => 'bob', 'total_points' => 5]);
+
+    $discord = Mockery::mock(DiscordService::class);
+    $discord->shouldReceive('postMessage')->once()->andReturnUsing(function (array $embeds) {
+        $last = end($embeds);
+        expect($last['description'])->toContain('alice')->toContain('10 pts')->toContain('bob');
+    });
+    app()->instance(DiscordService::class, $discord);
+
+    Persona::factory()->create(['is_active' => true]);
+    PostWeeklyReportJob::dispatchSync();
+});
+
+it('awards a point to a user who correctly predicted a good buy trade', function () {
+    // Price up → 👍 is the correct prediction
+    mockDiscord(['msg999' => ['👍' => [['id' => 'user1', 'username' => 'alice']], '👎' => []]]);
+
+    Persona::factory()->create(['is_active' => true]);
+    $trade = Trade::factory()->buy()->create(['ticker' => 'AAPL', 'price_per_share' => 100.00]);
+    GamificationPost::factory()->create(['trade_id' => $trade->id, 'discord_message_id' => 'msg999']);
+    PriceSnapshot::factory()->forTicker('AAPL')->create(['price' => 120.00, 'fetched_at' => now()]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    $point = UserPoint::where('discord_user_id', 'user1')->first();
+    expect($point)->not->toBeNull()->and($point->total_points)->toBe(1);
+});
+
+it('awards a point to a user who correctly predicted a bad buy trade', function () {
+    // Price down → 👎 is the correct prediction
+    mockDiscord(['msg888' => ['👍' => [], '👎' => [['id' => 'user2', 'username' => 'bob']]]]);
+
+    Persona::factory()->create(['is_active' => true]);
+    $trade = Trade::factory()->buy()->create(['ticker' => 'TSLA', 'price_per_share' => 200.00]);
+    GamificationPost::factory()->create(['trade_id' => $trade->id, 'discord_message_id' => 'msg888']);
+    PriceSnapshot::factory()->forTicker('TSLA')->create(['price' => 180.00, 'fetched_at' => now()]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    $point = UserPoint::where('discord_user_id', 'user2')->first();
+    expect($point)->not->toBeNull()->and($point->total_points)->toBe(1);
+});
+
+it('marks gamification posts as resolved after scoring', function () {
+    mockDiscord(['msg777' => ['👍' => [], '👎' => []]]);
+
+    Persona::factory()->create(['is_active' => true]);
+    $trade = Trade::factory()->buy()->create(['ticker' => 'NVDA', 'price_per_share' => 100.00]);
+    GamificationPost::factory()->create(['trade_id' => $trade->id, 'discord_message_id' => 'msg777']);
+    PriceSnapshot::factory()->forTicker('NVDA')->create(['price' => 110.00, 'fetched_at' => now()]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    expect(GamificationPost::whereNull('resolved_at')->count())->toBe(0);
+});
+
+it('does not award points to a user who reacted with both thumbs up and down', function () {
+    // cheater voted both; honest only voted 👍; price up → 👍 is correct
+    mockDiscord(['msg666' => [
+        '👍' => [['id' => 'cheater1', 'username' => 'cheater'], ['id' => 'honest1', 'username' => 'honest']],
+        '👎' => [['id' => 'cheater1', 'username' => 'cheater']],
+    ]]);
+
+    Persona::factory()->create(['is_active' => true]);
+    $trade = Trade::factory()->buy()->create(['ticker' => 'AAPL', 'price_per_share' => 100.00]);
+    GamificationPost::factory()->create(['trade_id' => $trade->id, 'discord_message_id' => 'msg666']);
+    PriceSnapshot::factory()->forTicker('AAPL')->create(['price' => 120.00, 'fetched_at' => now()]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    expect(UserPoint::where('discord_user_id', 'cheater1')->first())->toBeNull();
+    expect(UserPoint::where('discord_user_id', 'honest1')->first()?->total_points)->toBe(1);
+});
+
+it('does not re-score already resolved gamification posts', function () {
+    $discord = Mockery::mock(DiscordService::class);
+    $discord->shouldReceive('postMessage')->once();
+    $discord->shouldReceive('getReactions')->never();
+    app()->instance(DiscordService::class, $discord);
+
+    Persona::factory()->create(['is_active' => true]);
+    $trade = Trade::factory()->buy()->create(['ticker' => 'AMD', 'price_per_share' => 100.00]);
+    GamificationPost::factory()->resolved()->create(['trade_id' => $trade->id, 'discord_message_id' => 'old_msg']);
+    PriceSnapshot::factory()->forTicker('AMD')->create(['price' => 120.00, 'fetched_at' => now()]);
+
+    PostWeeklyReportJob::dispatchSync();
+
+    expect(UserPoint::count())->toBe(0);
 });
