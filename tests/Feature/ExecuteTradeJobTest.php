@@ -9,6 +9,12 @@ use App\Models\Trade;
 use App\Trading\TradeSignal;
 use Illuminate\Support\Facades\Queue;
 
+beforeEach(function () {
+    // Disable the lottery by default so non-lottery tests don't trigger
+    // PostTradeLotteryJob (which would hit the real Discord API under sync queue).
+    config(['trading.trade_lottery_probability' => 0]);
+});
+
 it('creates a trade record on a buy', function () {
     $persona = Persona::factory()->create(['cash_balance' => 10000.00]);
     $signal = new TradeSignal(
