@@ -4,6 +4,7 @@ use App\Jobs\EvaluatePersonaJob;
 use App\Jobs\PostWeeklyReportJob;
 use App\Jobs\SyncGainersJob;
 use App\Models\Persona;
+use App\Services\TsxMarketCalendar;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
@@ -18,6 +19,7 @@ Schedule::call(function () {
     ->weekdays()
     ->timezone('America/New_York')
     ->between('9:30', '16:00')
+    ->skip(fn () => ! app(TsxMarketCalendar::class)->isTradingDay(today('America/New_York')))
     ->name('trading:evaluate-personas');
 
 // Post weekly summary every Friday at noon MT.
@@ -31,4 +33,5 @@ Schedule::job(new SyncGainersJob)
     ->weekdays()
     ->timezone('America/New_York')
     ->dailyAt('9:00')
+    ->skip(fn () => ! app(TsxMarketCalendar::class)->isTradingDay(today('America/New_York')))
     ->name('trading:sync-gainers');
