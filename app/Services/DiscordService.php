@@ -60,6 +60,7 @@ class DiscordService
         $messageId = $response['id'];
 
         $this->selfReact($messageId, '👍');
+        usleep(300_000);
         $this->selfReact($messageId, '👎');
 
         return $messageId;
