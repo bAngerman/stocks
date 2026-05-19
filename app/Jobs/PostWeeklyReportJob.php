@@ -165,7 +165,9 @@ class PostWeeklyReportJob implements ShouldQueue
             $wrongEmoji = $correctEmoji === '👍' ? '👎' : '👍';
 
             $correctReactors = collect($discord->getReactions($post->discord_message_id, $correctEmoji));
+            usleep(300_000);
             $wrongReactors = collect($discord->getReactions($post->discord_message_id, $wrongEmoji));
+            usleep(300_000);
 
             $doubleVoterIds = $correctReactors->pluck('id')
                 ->intersect($wrongReactors->pluck('id'));
